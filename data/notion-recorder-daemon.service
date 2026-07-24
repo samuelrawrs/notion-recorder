@@ -7,9 +7,7 @@ Wants=pipewire-pulse.service
 
 [Service]
 Type=simple
-# Installed location under the default PREFIX (~/.local). If you install with a
-# different PREFIX, edit this path or drop the unit into ~/.config/systemd/user.
-ExecStart=%h/.local/bin/notion-recorder-daemon
+ExecStart=/usr/bin/notion-recorder-daemon
 Restart=on-failure
 RestartSec=5
 

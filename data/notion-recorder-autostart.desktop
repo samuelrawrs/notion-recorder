@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Notion Recorder Auto-start
-Comment=Start the Notion meeting mix automatically when the microphone is in use
-Exec=notion-recorder-daemon
-NoDisplay=true
-Terminal=false
-X-GNOME-Autostart-enabled=true

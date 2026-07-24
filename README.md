@@ -1,87 +1,111 @@
 # Notion Recorder
 
-Notion Recorder is a Linux PipeWire/PulseAudio bridge for Notion AI Meeting
-Notes. It mixes the selected microphone with the monitor of the selected audio
-output, then exposes that mix as a virtual microphone.
+No-echo meeting audio for **Notion AI Meeting Notes** on Linux.
 
-The mix has no path back to playback. It captures both sides of a call without
-creating an audio-feedback loop.
+Notion Recorder creates a capture-only PipeWire/PulseAudio virtual microphone
+(**Notion Meeting Mix**) that blends your physical microphone with the selected
+speaker output, so Notion transcribes both sides of a call from a single input.
+The mix is never routed back to playback, so remote participants never hear an
+echo, and your system default microphone is left untouched (Google Meet, Zoom
+and Teams keep using it unchanged).
 
-An optional background daemon can auto-start the mix when you use the mic during
-a meeting and stop it afterwards (see `AUTOSTART.md`).
+It ships as a GTK4/libadwaita app with live level meters, friendly device
+pickers, an audio-flow diagram, and an optional mic-activity daemon that can
+auto-start and stop the mix around your calls.
 
-## Requirements
+> Requires a Debian/Ubuntu system with PipeWire (`pipewire-pulse`) or PulseAudio.
 
-- Linux with PipeWire and `pipewire-pulse`, or PulseAudio
-- `pactl` and `parec` (from `pulseaudio-utils`)
-- Python 3 with GTK 4 and libadwaita (`python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`) for the desktop app
+## Install
 
-## Install with Flatpak
+### Recommended: apt repository
 
-```bash
-flatpak install flathub org.gnome.Sdk//48 org.gnome.Platform//48
-flatpak-builder --user --install --force-clean build-dir \
-    io.github.samuelrawrs.NotionRecorder.yaml
-flatpak run io.github.samuelrawrs.NotionRecorder
-```
-
-The Flatpak bundles the `pactl`/`parec` client tools and reaches the host
-PipeWire/PulseAudio through `--socket=pulseaudio`. Note: the optional
-mic-activity auto-start daemon does not run inside the sandbox; use the
-source install below if you want auto-start. See `FLATPAK.md` for details.
-
-## Install locally
+Gets you `apt install notion-recorder` and automatic updates via `apt upgrade`.
 
 ```bash
-make install
+curl -fsSL https://samuelrawrs.github.io/notion-recorder/notion-recorder.gpg \
+  | sudo tee /usr/share/keyrings/notion-recorder.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/notion-recorder.gpg] https://samuelrawrs.github.io/notion-recorder stable main" \
+  | sudo tee /etc/apt/sources.list.d/notion-recorder.list
+sudo apt update
+sudo apt install notion-recorder
 ```
 
-Open **Notion Recorder** from the desktop app launcher, or run the CLI directly:
+### Or: a single .deb
+
+Grab `notion-recorder_<version>_all.deb` from the
+[Releases page](https://github.com/samuelrawrs/notion-recorder/releases) and:
 
 ```bash
-notion-meeting-audio start
+sudo apt install ./notion-recorder_1.0.0_all.deb
 ```
+
+`apt` pulls the dependencies (`pulseaudio-utils`, `python3-gi`, `gir1.2-gtk-4.0`,
+`gir1.2-adw-1`, and cairo bindings) automatically either way.
 
 ## Use for a meeting
 
-1. Connect and select the external microphone and headphones.
-2. Start the bridge.
+1. Connect and select your external microphone and headphones.
+2. Open **Notion Recorder** and start the mix.
 3. In Notion, begin a fresh transcript and select **Notion Meeting Mix** as the microphone.
-4. Google Meet, Zoom, and Teams keep using your physical microphone automatically. The bridge never changes your system default input, so participants can never hear an echo.
-5. At the end, stop transcription, then stop the bridge.
+4. Google Meet, Zoom, and Teams keep using your physical microphone automatically. The mix never changes your system default input, so participants can never hear an echo.
+5. When done, stop transcription in Notion, then stop the mix.
 
-If a microphone or output device changes, stop transcription, restart the bridge,
+If you change microphone or output device, stop transcription, restart the mix,
 hard-reload Notion, then begin a fresh transcript.
 
-## Verify
-
-Run a short local-mic phrase, then play a short YouTube clip through the selected
-headphones. Both should appear in Notion. Remote meeting participants must not
-hear their own speech echoed back.
-
-## Commands
-
-```bash
-notion-meeting-audio start
-notion-meeting-audio stop
-notion-meeting-audio restart
-notion-meeting-audio status
-notion-meeting-audio toggle
-```
+**Verify:** say a short phrase, then play a few seconds of a YouTube clip through
+the selected headphones. Both should appear in Notion, and remote participants
+must not hear their own speech echoed back.
 
 ## Auto-start (optional)
 
-A background daemon can start the mix automatically on mic activity and stop it
-when the meeting ends. It is opt-in and not enabled by `make install`; see
-`AUTOSTART.md` to enable it.
+A background daemon can start the mix automatically when it detects an app
+capturing your microphone (a call starting) and stop it shortly after the call
+ends. It is **off by default**. Toggle it from the app's Configuration page, or
+manually:
 
-## Distribution status
+```bash
+systemctl --user enable --now notion-recorder-daemon.service   # enable
+systemctl --user disable --now notion-recorder-daemon.service  # disable
+```
 
-Both a local `make install` and a Flatpak build are supported. The Flatpak
-bundles the PulseAudio client tools (`pactl`/`parec`) and reaches the host
-PipeWire/PulseAudio through explicit audio permissions; see `FLATPAK.md`.
+The daemon only reads stream metadata from `pactl`; it never inspects audio
+samples, and it only auto-stops a mix that it started itself.
+
+## Command line
+
+```bash
+notion-meeting-audio start | stop | restart | status | toggle
+```
+
+## Uninstall
+
+```bash
+sudo apt remove notion-recorder
+# if you added the apt repository:
+sudo rm -f /etc/apt/sources.list.d/notion-recorder.list /usr/share/keyrings/notion-recorder.gpg
+```
+
+## Build from source
+
+```bash
+make deb                 # build notion-recorder_<version>_all.deb into ../
+sudo apt install ../notion-recorder_*.deb
+
+# or install straight into a prefix without packaging:
+sudo make install                    # into /usr
+make install PREFIX=$HOME/.local     # per-user, no root
+```
+
+Releases and the apt repository are produced automatically by
+`.github/workflows/release.yml` when a `v*.*.*` tag is pushed (see the workflow
+for the one-time `GPG_PRIVATE_KEY` secret and GitHub Pages setup).
 
 ## Consent
 
 Obtain the consent required by the participants and applicable law before
 recording or transcribing a meeting.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

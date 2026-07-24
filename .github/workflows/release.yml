@@ -1,0 +1,122 @@
+name: Build .deb and publish apt repo
+
+# Runs on a version tag (e.g. v1.0.0). Builds the package, attaches it to the
+# GitHub Release, and (re)builds the signed apt repository published via
+# GitHub Pages so users can `apt install notion-recorder`.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debhelper dpkg-dev fakeroot
+
+      - name: Build binary package
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p dist
+          mv ../*.deb dist/
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+
+      - name: Install repo tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro gnupg
+
+      - name: Import signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::GPG_PRIVATE_KEY secret is not set. Add it (see README) and re-run."
+            exit 1
+          fi
+          export GNUPGHOME="$(mktemp -d)"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')"
+          echo "fpr=$FPR" >> "$GITHUB_OUTPUT"
+
+      - name: Build apt repository
+        env:
+          FPR: ${{ steps.gpg.outputs.fpr }}
+        run: |
+          mkdir -p repo/conf
+          cat > repo/conf/distributions <<EOF
+          Origin: notion-recorder
+          Label: Notion Recorder
+          Codename: stable
+          Suite: stable
+          Components: main
+          Architectures: amd64 arm64
+          Description: Notion Recorder apt repository
+          SignWith: $FPR
+          EOF
+          for deb in dist/*.deb; do
+            reprepro -b repo includedeb stable "$deb"
+          done
+          # Public key users import to verify the repo (dearmored binary keyring).
+          gpg --export "$FPR" > repo/notion-recorder.gpg
+          # Simple landing page.
+          cat > repo/index.html <<'HTML'
+          <!doctype html><meta charset="utf-8">
+          <title>Notion Recorder apt repository</title>
+          <h1>Notion Recorder apt repository</h1>
+          <p>See <a href="https://github.com/samuelrawrs/notion-recorder">the project README</a> for install instructions.</p>
+          HTML
+          ls -R repo
+
+      - name: Publish to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./repo
+          force_orphan: true
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: deb
+          path: dist
+      - name: Create/update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.deb
+          generate_release_notes: true

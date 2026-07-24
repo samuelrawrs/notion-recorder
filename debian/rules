@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# Nothing to compile; syntax/compile check stands in for a build+test.
+override_dh_auto_build:
+
+override_dh_auto_test:
+	$(MAKE) check
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/notion-recorder PREFIX=/usr
+
+# The mic-activity unit is opt-in (enabled from the app), never on install.
+override_dh_installsystemduser:
+	dh_installsystemduser --no-enable

@@ -1,5 +1,18 @@
 __pycache__/
 *.py[cod]
 
-# Release artifacts from `make dist`
-/notion-recorder-*.tar.gz
+# Debian build artifacts
+/debian/notion-recorder/
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper.log
+
+# Built packages / build metadata
+*.deb
+*.buildinfo
+*.changes
+
+# Local staging dir (make install DESTDIR=build/pkg, key generation, etc.)
+/build/
