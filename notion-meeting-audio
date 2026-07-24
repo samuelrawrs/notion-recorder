@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Capture-only PipeWire/PulseAudio mix for Notion Meeting Notes on Linux.
+set -euo pipefail
+
+readonly MIX_SINK='notion_meeting_mix'
+readonly MIX_SOURCE='notion_meeting_mix_source'
+readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/notion-recorder"
+readonly PREVIOUS_SOURCE_FILE="$STATE_DIR/previous-default-source"
+readonly CONFIG_DIR="$HOME/.config/notion-recorder"
+readonly CONFIG_FILE="$CONFIG_DIR/audio.conf"
+
+# The bridge never changes the system default microphone. Other apps (Google Meet,
+# Zoom, Teams) keep using your physical mic, so no meeting echo is possible. Notion
+# must explicitly select the "Notion Meeting Mix" input.
+
+require_pulse() { pactl info >/dev/null; }
+
+module_ids() {
+  pactl list short modules | awk -v term="$MIX_SINK" '$0 ~ term { print $1 }'
+}
+
+source_exists() {
+  pactl list short sources | awk -v source="$1" '$2 == source { found = 1 } END { exit !found }'
+}
+
+sink_exists() {
+  pactl list short sinks | awk -v sink="$1" '$2 == sink { found = 1 } END { exit !found }'
+}
+
+configured_value() {
+  local key="$1"
+  [[ -r "$CONFIG_FILE" ]] || return 0
+  awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$CONFIG_FILE"
+}
+
+selected_source() {
+  local source
+  source="$(configured_value source)"
+  if [[ -n "$source" ]] && source_exists "$source"; then printf '%s
+' "$source"; else pactl get-default-source; fi
+}
+
+selected_sink() {
+  local sink
+  sink="$(configured_value sink)"
+  if [[ -n "$sink" ]] && sink_exists "$sink"; then printf '%s
+' "$sink"; else pactl get-default-sink; fi
+}
+
+configure() {
+  local source="$1" sink="$2"
+  if [[ -n "$source" ]] && ! source_exists "$source"; then printf 'Unknown microphone: %s
+' "$source" >&2; exit 1; fi
+  if [[ -n "$sink" ]] && ! sink_exists "$sink"; then printf 'Unknown output: %s
+' "$sink" >&2; exit 1; fi
+  mkdir -p "$CONFIG_DIR"
+  printf 'source=%s
+sink=%s
+' "$source" "$sink" > "$CONFIG_FILE"
+  printf 'Audio devices saved.
+'
+}
+
+show_config() {
+  printf 'source=%s
+' "$(configured_value source)"
+  printf 'sink=%s
+' "$(configured_value sink)"
+}
+
+mix_is_active() {
+  pactl list short sinks | awk -v sink="$MIX_SINK" '$2 == sink { found = 1 } END { exit !found }'
+}
+
+output_loopback_ids() {
+  pactl list short modules | awk -v sink="$MIX_SINK" '$2 == "module-loopback" && $0 ~ ("sink=" sink) && $0 ~ /source=.*\.monitor/ { print $1 }'
+}
+
+output_is_synced() {
+  local sink="$1" expected
+  expected="source=${sink}.monitor"
+  pactl list short modules | awk -v sink="$MIX_SINK" -v source="$expected" '$2 == "module-loopback" && $0 ~ ("sink=" sink) && $0 ~ source { found = 1 } END { exit !found }'
+}
+
+# Restore the system default microphone only if an older version of this bridge
+# had changed it. Current versions never touch the default, so this is a no-op
+# unless a stale state file is present.
+restore_default_source() {
+  local previous_source
+  [[ -r "$PREVIOUS_SOURCE_FILE" ]] || return 0
+  previous_source="$(<"$PREVIOUS_SOURCE_FILE")"
+  if source_exists "$previous_source"; then
+    pactl set-default-source "$previous_source" || true
+  fi
+  rm -f "$PREVIOUS_SOURCE_FILE"
+  rmdir "$STATE_DIR" 2>/dev/null || true
+}
+
+stop() {
+  local ids
+  ids="$(module_ids || true)"
+  if [[ -n "$ids" ]]; then
+    while IFS= read -r id; do pactl unload-module "$id" || true; done <<< "$ids"
+  fi
+  restore_default_source
+}
+
+start() {
+  local source sink null_id mic_id output_id remap_id
+  stop
+  source="$(selected_source)"
+  sink="$(selected_sink)"
+  null_id="$(pactl load-module module-null-sink sink_name="$MIX_SINK" sink_properties='device.description=Notion Meeting Mix')"
+  if ! mic_id="$(pactl load-module module-loopback source="$source" sink="$MIX_SINK" latency_msec=20)"; then
+    pactl unload-module "$null_id" || true; exit 1
+  fi
+  if ! output_id="$(pactl load-module module-loopback source="$sink.monitor" sink="$MIX_SINK" latency_msec=20)"; then
+    pactl unload-module "$mic_id" || true; pactl unload-module "$null_id" || true; exit 1
+  fi
+  if ! remap_id="$(pactl load-module module-remap-source master="$MIX_SINK.monitor" source_name="$MIX_SOURCE" source_properties='device.description=Notion Meeting Mix')"; then
+    pactl unload-module "$output_id" || true; pactl unload-module "$mic_id" || true; pactl unload-module "$null_id" || true; exit 1
+  fi
+  printf 'Notion Meeting Mix is ready.\n'
+  printf 'Mic: %s\nOutput monitor: %s.monitor\n' "$source" "$sink"
+  printf 'In Notion, select "Notion Meeting Mix" as the microphone.\n'
+  printf 'Your system default microphone is unchanged, so Google Meet is unaffected.\n'
+}
+
+sync_output() {
+  local sink ids
+  if ! mix_is_active; then
+    printf 'Notion Meeting Mix is inactive. Start it first.\n' >&2
+    exit 1
+  fi
+  sink="$(selected_sink)"
+  if output_is_synced "$sink"; then
+    printf 'Notion Meeting Mix already monitors the current output.\n'
+    return 0
+  fi
+  ids="$(output_loopback_ids || true)"
+  if [[ -n "$ids" ]]; then
+    while IFS= read -r id; do pactl unload-module "$id" || true; done <<< "$ids"
+  fi
+  pactl load-module module-loopback source="$sink.monitor" sink="$MIX_SINK" latency_msec=20 >/dev/null
+  printf 'Notion Meeting Mix now monitors: %s.monitor\n' "$sink"
+}
+
+status() {
+  if mix_is_active && source_exists "$MIX_SOURCE"; then printf 'Notion Meeting Mix: active\n'; else printf 'Notion Meeting Mix: inactive\n'; fi
+}
+
+toggle() {
+  if mix_is_active; then stop; printf 'Notion Meeting Mix stopped.\n'; else start; fi
+}
+
+case "${1:-}" in
+  start) require_pulse; start ;;
+  stop) require_pulse; stop ;;
+  restart) require_pulse; stop; start ;;
+  sync-output) require_pulse; sync_output ;;
+  status) require_pulse; status ;;
+  toggle) require_pulse; toggle ;;
+  mic-source) require_pulse; selected_source ;;
+  configure) require_pulse; configure "${2:-}" "${3:-}" ;;
+  config) show_config ;;
+  *) printf 'Usage: %s {start|stop|restart|sync-output|status|toggle|mic-source|configure SOURCE SINK|config}\n' "$0" >&2; exit 64 ;;
+esac

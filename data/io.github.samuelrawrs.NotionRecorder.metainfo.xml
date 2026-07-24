@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.samuelrawrs.NotionRecorder</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Notion Recorder</name>
+  <summary>No-echo meeting audio for Notion AI Meeting Notes</summary>
+
+  <description>
+    <p>
+      Notion Recorder creates a private, capture-only microphone that mixes your voice with
+      your meeting and system audio, so Notion AI Meeting Notes transcribes both sides of a
+      call in one input.
+    </p>
+    <p>
+      The mix is never routed back to your speakers or headphones, so remote participants
+      never hear an echo. Start it before a transcript, stop it after, and your original
+      default microphone is restored automatically.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>One-click virtual microphone that combines your mic and system sound</li>
+      <li>Live circular level meters for your voice and the meeting audio</li>
+      <li>Friendly device pickers, with the currently applied devices always shown</li>
+      <li>Capture-only routing that produces no feedback for meeting participants</li>
+      <li>Optional mic-activity daemon that auto-starts and stops the mix</li>
+    </ul>
+    <p>
+      The virtual input can be selected by any application that records from a microphone,
+      though the guided workflow is tuned for Notion.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.samuelrawrs.NotionRecorder.desktop</launchable>
+
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+
+  <keywords>
+    <keyword>Notion</keyword>
+    <keyword>meeting</keyword>
+    <keyword>transcript</keyword>
+    <keyword>microphone</keyword>
+    <keyword>PipeWire</keyword>
+    <keyword>recording</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1"/>
+
+  <developer id="io.github.samuelrawrs">
+    <name>samuelrawrs</name>
+  </developer>
+
+  <url type="homepage">https://github.com/samuelrawrs/notion-recorder</url>
+  <url type="bugtracker">https://github.com/samuelrawrs/notion-recorder/issues</url>
+
+  <releases>
+    <release version="1.0.0" date="2026-07-24">
+      <description>
+        <p>First release: guided no-echo meeting mix, live meters, friendly device pickers, and an audio-flow diagram.</p>
+      </description>
+    </release>
+  </releases>
+</component>

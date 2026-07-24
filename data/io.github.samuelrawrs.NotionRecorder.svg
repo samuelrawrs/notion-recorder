@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#18c78f"/>
+      <stop offset="1" stop-color="#089a6a"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#04543a" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="432" height="432" rx="108" fill="url(#tile)"/>
+  <rect x="40" y="40" width="432" height="432" rx="108" fill="url(#sheen)"/>
+
+  <g filter="url(#soft)">
+    <!-- incoming waves: two sources merging into one capture -->
+    <g fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="14" stroke-linecap="round">
+      <path d="M170 198 a44 44 0 0 0 0 116"/>
+      <path d="M146 178 a64 64 0 0 0 0 156"/>
+      <path d="M342 198 a44 44 0 0 1 0 116"/>
+      <path d="M366 178 a64 64 0 0 1 0 156"/>
+    </g>
+
+    <!-- microphone capsule -->
+    <rect x="212" y="120" width="88" height="170" rx="44" fill="#ffffff"/>
+    <!-- pickup bracket -->
+    <path d="M170 252 a86 86 0 0 0 172 0" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+    <!-- stem and base -->
+    <path d="M256 340 L256 374" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+    <path d="M214 388 L298 388" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  </g>
+</svg>

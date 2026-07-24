@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+
+# Release artifacts from `make dist`
+/notion-recorder-*.tar.gz

@@ -1,0 +1,17 @@
+[Unit]
+Description=Notion Recorder auto-start daemon (mic-activity bridge control)
+Documentation=https://github.com/samuelrawrs/notion-recorder
+# Needs the user PipeWire/Pulse session to be up before it can talk to pactl.
+After=pipewire-pulse.service pipewire.service wireplumber.service
+Wants=pipewire-pulse.service
+
+[Service]
+Type=simple
+# Installed location under the default PREFIX (~/.local). If you install with a
+# different PREFIX, edit this path or drop the unit into ~/.config/systemd/user.
+ExecStart=%h/.local/bin/notion-recorder-daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

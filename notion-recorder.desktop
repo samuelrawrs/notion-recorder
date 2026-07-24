@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Notion Recorder
+GenericName=Meeting Audio Recorder
+Comment=Create a no-echo meeting audio input for Notion
+Keywords=Notion;meeting;transcript;microphone;audio;recording;PipeWire;
+Exec=notion-recorder
+Icon=io.github.samuelrawrs.NotionRecorder
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupNotify=true
+StartupWMClass=NotionRecorder

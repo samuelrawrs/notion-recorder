@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# Optional auto-start daemon for the Notion meeting-audio bridge.
+#
+# Watches PipeWire (through pactl's PulseAudio compatibility layer) for EXTERNAL
+# capture streams on the physical microphone and:
+#   * starts `notion-meeting-audio` when another app begins capturing the mic
+#     (Google Meet / Zoom / Teams / any recorder), and
+#   * stops it again a few seconds after external capture returns to zero.
+#
+# Mic activity is the trigger because it is the one framework-agnostic signal for
+# "the user is in a meeting or recording" - it works for every conferencing app
+# and does not depend on browser tab / window heuristics.
+#
+# CRITICAL: once the bridge runs it loads its own module-loopback that records
+# from the physical mic. That would make a naive "mic in use" check latch on
+# forever. This daemon therefore counts only EXTERNAL source-outputs on the mic,
+# excluding any owned by the bridge's own notion_meeting_mix modules and the
+# app's own level meter.
+#
+# Privacy: the daemon never records or inspects audio samples. It only reads
+# stream metadata (indices, owner modules, application names) from pactl.
+set -uo pipefail
+
+readonly METER_CLIENT="Notion Recorder Meter"
+readonly MIX_TAG="notion_meeting_mix"
+# Tunables (all overridable via the environment, mainly for testing).
+POLL_INTERVAL="${NOTION_DAEMON_POLL_SECONDS:-2}"        # periodic reconcile cadence
+STOP_DEBOUNCE="${NOTION_DAEMON_STOP_DEBOUNCE_SECONDS:-4}" # zero-capture grace before stop
+RETRY_INTERVAL="${NOTION_DAEMON_RETRY_SECONDS:-5}"      # wait when pactl is unavailable
+
+readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/notion-recorder"
+readonly OWNED_FLAG="$STATE_DIR/daemon-autostarted"
+
+BRIDGE=""
+zero_since=0
+
+log() { printf '%s notion-recorder-daemon: %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
+
+# Locate the bridge both from the repo checkout and when installed to ~/.local/bin.
+resolve_bridge() {
+  if [[ -n "${NOTION_MEETING_AUDIO:-}" && -x "${NOTION_MEETING_AUDIO}" ]]; then
+    printf '%s\n' "$NOTION_MEETING_AUDIO"
+    return 0
+  fi
+  local self_dir
+  self_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  if [[ -x "$self_dir/notion-meeting-audio" ]]; then
+    printf '%s\n' "$self_dir/notion-meeting-audio"
+    return 0
+  fi
+  local found
+  if found="$(command -v notion-meeting-audio 2>/dev/null)"; then
+    printf '%s\n' "$found"
+    return 0
+  fi
+  return 1
+}
+
+bridge_active() {
+  local out
+  out="$("$BRIDGE" status 2>/dev/null)" || return 1
+  # status prints "Notion Meeting Mix: active" or "... : inactive".
+  [[ "$out" == *": active"* ]]
+}
+
+mic_source_name() {
+  "$BRIDGE" mic-source 2>/dev/null | head -n1
+}
+
+source_index() {
+  local name="$1"
+  [[ -n "$name" ]] || return 1
+  pactl list short sources 2>/dev/null | awk -v n="$name" '$2 == n { print $1; exit }'
+}
+
+# Module ids of everything the bridge created (null-sink, loopbacks, remap-source).
+# Their argument strings all contain the notion_meeting_mix tag.
+bridge_module_ids() {
+  pactl list short modules 2>/dev/null | awk -v tag="$MIX_TAG" 'index($0, tag) { print $1 }'
+}
+
+# Count EXTERNAL capture streams on the given physical-mic source index.
+# Excludes source-outputs owned by a bridge module (its own mic loopback) and the
+# app's own parec level meter, so the count reflects only third-party apps.
+external_capture_count() {
+  local mic_idx="$1"
+  shift
+  local exclude="$*"
+  pactl list source-outputs 2>/dev/null | awk \
+    -v mic="$mic_idx" -v excl="$exclude" -v meter="$METER_CLIENT" '
+    function flush() {
+      if (have && src == mic && !(owner in ex) && app != meter) count++
+    }
+    BEGIN {
+      n = split(excl, arr, " ")
+      for (i = 1; i <= n; i++) if (arr[i] != "") ex[arr[i]] = 1
+      count = 0
+    }
+    /^Source Output #/ { flush(); have = 1; src = ""; owner = ""; app = "" }
+    /^[[:space:]]*Source:/ { src = $2 }
+    /^[[:space:]]*Owner Module:/ { owner = $3 }
+    /application\.name = "/ {
+      line = $0
+      sub(/^.*application\.name = "/, "", line)
+      sub(/".*/, "", line)
+      app = line
+    }
+    END { flush(); print count + 0 }
+  '
+}
+
+start_bridge() {
+  log "external mic capture detected -> starting bridge"
+  if "$BRIDGE" start >/dev/null 2>&1; then
+    mkdir -p "$STATE_DIR" 2>/dev/null && : > "$OWNED_FLAG"
+  else
+    log "bridge start failed"
+  fi
+}
+
+stop_bridge() {
+  log "external mic capture ended -> stopping bridge"
+  "$BRIDGE" stop >/dev/null 2>&1 || log "bridge stop failed"
+  rm -f "$OWNED_FLAG"
+}
+
+# Bring the bridge state in line with current external mic activity.
+reconcile() {
+  pactl info >/dev/null 2>&1 || return 0  # PipeWire/Pulse absent: no-op safe.
+
+  local mic idx exclude count active now
+  mic="$(mic_source_name)"
+  [[ -n "$mic" ]] || return 0
+  idx="$(source_index "$mic")"
+  [[ -n "$idx" ]] || return 0
+
+  exclude="$(bridge_module_ids | tr '\n' ' ')"
+  # shellcheck disable=SC2086  # word-splitting the module id list is intentional.
+  count="$(external_capture_count "$idx" $exclude)"
+  count="${count:-0}"
+
+  if bridge_active; then active=1; else active=0; fi
+
+  if (( count > 0 )); then
+    zero_since=0
+    (( active == 0 )) && start_bridge
+    return 0
+  fi
+
+  # No external capture on the physical mic.
+  if (( active == 0 )); then
+    zero_since=0
+    return 0
+  fi
+  # Bridge is on. Only auto-stop what the daemon itself auto-started, so a manual
+  # start from the UI is never torn down underneath the user.
+  if [[ ! -f "$OWNED_FLAG" ]]; then
+    return 0
+  fi
+  now="$(date +%s)"
+  if (( zero_since == 0 )); then
+    zero_since=$now
+  elif (( now - zero_since >= STOP_DEBOUNCE )); then
+    stop_bridge
+    zero_since=0
+  fi
+}
+
+# Event stream from pactl subscribe, with a read timeout so reconciliation also
+# runs periodically (not solely on events). Distinguishes timeout from EOF so a
+# dead `pactl subscribe` triggers a clean re-subscribe instead of a busy loop.
+watch() {
+  local line rc
+  while true; do
+    if IFS= read -r -t "$POLL_INTERVAL" line <&3; then
+      case "$line" in
+        *source-output*|*" client "*|*"'new' on source"*|*"'remove' on source"*) reconcile ;;
+      esac
+    else
+      rc=$?
+      if (( rc > 128 )); then
+        reconcile          # read timed out -> periodic reconcile
+      else
+        return 0           # EOF -> pactl subscribe exited
+      fi
+    fi
+  done 3< <(pactl subscribe 2>/dev/null)
+}
+
+main() {
+  if ! BRIDGE="$(resolve_bridge)"; then
+    log "cannot find notion-meeting-audio (set NOTION_MEETING_AUDIO or install it)"
+    exit 1
+  fi
+  log "started; bridge=$BRIDGE poll=${POLL_INTERVAL}s debounce=${STOP_DEBOUNCE}s"
+  reconcile
+  while true; do
+    if ! pactl info >/dev/null 2>&1; then
+      log "pactl unavailable; retrying in ${RETRY_INTERVAL}s"
+      sleep "$RETRY_INTERVAL"
+      continue
+    fi
+    watch
+    log "pactl subscribe ended; re-subscribing"
+    sleep 1
+  done
+}
+
+main "$@"
