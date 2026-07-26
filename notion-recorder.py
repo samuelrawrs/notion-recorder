@@ -199,8 +199,8 @@ class AudioDial:
     def __init__(self, title: str) -> None:
         self.fraction = 0.0
         self.armed = False
-        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, halign=Gtk.Align.CENTER)
-        self.canvas = Gtk.DrawingArea(content_width=150, content_height=150)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER)
+        self.canvas = Gtk.DrawingArea(content_width=104, content_height=104)
         self.canvas.set_draw_func(self.draw)
         self.value = Gtk.Label(label="-- dB", halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
         self.value.add_css_class("dial-value")
@@ -241,8 +241,9 @@ class AudioDial:
 
     def draw(self, _area: Gtk.DrawingArea, ctx, width: int, height: int, *_data) -> None:
         cx, cy = width / 2, height / 2
-        radius = min(width, height) / 2 - 12
-        ctx.set_line_width(15)
+        line_width = max(9.0, min(width, height) * 0.12)
+        radius = min(width, height) / 2 - line_width / 2 - 2
+        ctx.set_line_width(line_width)
         ctx.set_line_cap(1)  # cairo.LINE_CAP_ROUND
         ctx.set_source_rgb(*self.TRACK)
         ctx.arc(cx, cy, radius, 0, math.tau)
@@ -357,7 +358,7 @@ class NotionRecorder(Adw.Application):
         Gtk.Window.set_default_icon_name(APP_ID)
         self.load_css()
         self.setup_actions()
-        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=660, default_height=620)
+        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=460, default_height=540)
         self.window.set_icon_name(APP_ID)
         self.window.connect("close-request", self.on_close)
         toolbar = Adw.ToolbarView()
@@ -375,13 +376,15 @@ class NotionRecorder(Adw.Application):
         menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu")
         header.pack_end(menu_button)
         toolbar.add_top_bar(header)
-        recorder_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18, margin_top=24, margin_bottom=24, margin_start=28, margin_end=28)
+        recorder_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
         recorder_page.append(self.build_state_card())
         recorder_page.append(self.build_dials())
         recorder_page.append(self.build_footer())
         stack.add_titled(recorder_page, "recorder", "Recorder")
         stack.add_titled(self.build_config_page(), "config", "Configuration")
-        toolbar.set_content(stack)
+        scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        scroller.set_child(stack)
+        toolbar.set_content(scroller)
         self.window.set_content(toolbar)
         self.window.connect("notify::suspended", self.on_suspended)
         self.window.present()
@@ -444,16 +447,16 @@ class NotionRecorder(Adw.Application):
           stackswitcher button { min-height: 34px; border-radius: 10px; font-weight: 700; padding: 0 16px; }
           stackswitcher button:checked { background: #ffffff; color: #0b7a57; box-shadow: 0 2px 6px rgba(16,40,33,.10); }
 
-          .state-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 24px; padding: 26px; box-shadow: 0 10px 30px rgba(17,42,34,.07); }
-          .eyebrow { color: #0b9668; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
-          .state-title { color: #10201b; font-size: 27px; font-weight: 800; }
-          .state-detail { color: #64756e; font-size: 14px; }
+          .state-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 16px; padding: 16px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
+          .eyebrow { color: #0b9668; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+          .state-title { color: #10201b; font-size: 20px; font-weight: 800; }
+          .state-detail { color: #64756e; font-size: 13px; }
 
-          .dial-card { background: linear-gradient(155deg, #f0f6f2, #e3efe9); border: 1px solid #e0ebe5; border-radius: 26px; padding: 22px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
-          .dial-value { color: #10201b; font-size: 18px; font-weight: 800; }
-          .dial-title { color: #64756e; font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+          .dial-card { background: linear-gradient(155deg, #f0f6f2, #e3efe9); border: 1px solid #e0ebe5; border-radius: 16px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
+          .dial-value { color: #10201b; font-size: 15px; font-weight: 800; }
+          .dial-title { color: #64756e; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
 
-          .pill { min-height: 48px; border-radius: 15px; font-weight: 800; padding: 0 18px; }
+          .pill { min-height: 38px; border-radius: 11px; font-weight: 800; padding: 0 14px; }
           .pill:disabled { opacity: 1; }
           button.start { background: linear-gradient(135deg, #13bd88, #0aa06f); color: #ffffff; border: 0; box-shadow: 0 8px 18px rgba(11,150,104,.30); }
           button.start:hover { background: linear-gradient(135deg, #18c690, #0bab77); }
@@ -464,21 +467,21 @@ class NotionRecorder(Adw.Application):
           button.repair:hover { background: #ffffff; }
 
           .footer { color: #64756e; font-size: 13px; }
-          .important-card { background: #fff7e6; border: 1px solid #f0b429; border-left: 5px solid #f0b429; border-radius: 22px; padding: 20px; box-shadow: 0 10px 30px rgba(146,100,10,.10); }
-          .important-title { color: #8a5a00; font-size: 16px; font-weight: 800; letter-spacing: .01em; }
+          .important-card { background: #fff7e6; border: 1px solid #f0b429; border-left: 4px solid #f0b429; border-radius: 14px; padding: 13px; box-shadow: 0 6px 16px rgba(146,100,10,.08); }
+          .important-title { color: #8a5a00; font-size: 14px; font-weight: 800; letter-spacing: .01em; }
           .important-icon { color: #b7791f; }
-          .important-rule { color: #6b4a12; font-size: 13px; }
-          .important-dismiss { min-height: 24px; min-width: 24px; padding: 2px; color: #8a5a00; }
+          .important-rule { color: #6b4a12; font-size: 12px; }
+          .important-dismiss { min-height: 22px; min-width: 22px; padding: 0; color: #8a5a00; }
           .unavailable-note { color: #a15c00; font-size: 12px; }
-          .config-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 22px; padding: 22px; box-shadow: 0 10px 30px rgba(17,42,34,.07); }
-          .field-label { color: #10201b; font-size: 14px; font-weight: 800; }
+          .config-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 14px; padding: 14px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
+          .field-label { color: #10201b; font-size: 13px; font-weight: 800; }
           .field-hint { color: #64756e; font-size: 12px; }
           .applied { color: #0b7a58; font-size: 12px; font-weight: 700; }
-          dropdown { border-radius: 12px; }
+          dropdown { border-radius: 10px; }
 
-          .flow-wrap { background: linear-gradient(155deg, #f0f6f2, #e4efe9); border: 1px solid #e0ebe5; border-radius: 20px; padding: 22px; }
-          .flow-title { color: #10201b; font-size: 15px; font-weight: 800; }
-          .flow-card { background: #ffffff; border: 1px solid #dbe6e0; border-radius: 13px; padding: 9px 15px; color: #10201b; font-weight: 700; box-shadow: 0 3px 8px rgba(17,42,34,.06); }
+          .flow-wrap { background: linear-gradient(155deg, #f0f6f2, #e4efe9); border: 1px solid #e0ebe5; border-radius: 14px; padding: 14px; }
+          .flow-title { color: #10201b; font-size: 14px; font-weight: 800; }
+          .flow-card { background: #ffffff; border: 1px solid #dbe6e0; border-radius: 11px; padding: 7px 11px; color: #10201b; font-weight: 700; box-shadow: 0 3px 8px rgba(17,42,34,.06); }
           .flow-card.mix { background: linear-gradient(135deg, #13bd88, #0aa06f); color: #ffffff; border: 0; box-shadow: 0 6px 14px rgba(11,150,104,.28); }
           .flow-card.sink { background: #eef2ff; border: 1px solid #d7defb; color: #3b3ea8; box-shadow: 0 3px 8px rgba(59,62,168,.10); }
           .flow-arrow { color: #9aa8a1; font-size: 20px; font-weight: 800; }
@@ -489,7 +492,7 @@ class NotionRecorder(Adw.Application):
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def build_state_card(self) -> Gtk.Widget:
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         card.add_css_class("state-card")
         eyebrow = Gtk.Label(label="MEETING AUDIO", xalign=0)
         eyebrow.add_css_class("eyebrow")
@@ -516,7 +519,7 @@ class NotionRecorder(Adw.Application):
         return card
 
     def build_dials(self) -> Gtk.Widget:
-        card = Gtk.Box(spacing=22, homogeneous=True, halign=Gtk.Align.CENTER)
+        card = Gtk.Box(spacing=12, homogeneous=True, halign=Gtk.Align.CENTER)
         card.add_css_class("dial-card")
         for key in ("Microphone", "System audio"):
             dial = AudioDial(key)
@@ -566,7 +569,7 @@ class NotionRecorder(Adw.Application):
             self.important_card.set_visible(True)
 
     def build_config_page(self) -> Gtk.Widget:
-        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin_top=24, margin_bottom=24, margin_start=28, margin_end=28)
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
         page.append(self.build_important_card())
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("config-card")
