@@ -10,8 +10,8 @@ echo, and your system default microphone is left untouched (Google Meet, Zoom
 and Teams keep using it unchanged).
 
 It ships as a GTK4/libadwaita app with live level meters, friendly device
-pickers, an audio-flow diagram, and an optional mic-activity daemon that can
-auto-start and stop the mix around your calls.
+pickers, an audio-flow diagram, an optional mic-activity daemon that can
+auto-start and stop the mix around your calls, and an optional system-tray icon.
 
 > Requires a Debian/Ubuntu system with PipeWire (`pipewire-pulse`) or PulseAudio.
 
@@ -71,6 +71,18 @@ systemctl --user disable --now notion-recorder-daemon.service  # disable
 
 The daemon only reads stream metadata from `pactl`; it never inspects audio
 samples, and it only auto-stops a mix that it started itself.
+
+## Tray icon (optional)
+
+Turn on **Show a tray icon** on the Configuration page to add a top-bar menu
+that starts or stops the mix without opening the main window, and survives
+closing it. It runs as a small separate helper (`notion-recorder-tray`) and
+starts automatically on login while enabled.
+
+The tray needs an AppIndicator typelib (`gir1.2-ayatanaappindicator3-0.1`),
+which the package recommends and `apt` installs by default. On GNOME it also
+needs the AppIndicator shell extension (preinstalled on Ubuntu); most other
+desktops (KDE, Cinnamon, Budgie, XFCE, MATE) show it natively.
 
 ## Command line
 

@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import math
+import os
+import shutil
 import struct
 import subprocess
 import threading
@@ -57,6 +59,83 @@ def daemon_enabled() -> bool:
     if result is None:
         return False
     return result.stdout.strip().startswith("enabled")
+
+
+TRAY_BIN = "notion-recorder-tray"
+AUTOSTART_FILE = Path.home() / ".config" / "autostart" / "notion-recorder-tray.desktop"
+
+
+def tray_binary() -> str | None:
+    """Resolve the tray helper: repo checkout first, then PATH."""
+    sibling = ROOT / TRAY_BIN
+    if sibling.exists():
+        return str(sibling)
+    return shutil.which(TRAY_BIN)
+
+
+def tray_typelib_present() -> bool:
+    """True if an AppIndicator GIR typelib is installed (without importing GTK3)."""
+    names = ("AyatanaAppIndicator3-0.1.typelib", "AppIndicator3-0.1.typelib")
+    dirs: list[str] = []
+    env = os.environ.get("GI_TYPELIB_PATH")
+    if env:
+        dirs += env.split(os.pathsep)
+    dirs += [
+        "/usr/lib/girepository-1.0",
+        "/usr/lib64/girepository-1.0",
+        f"/usr/lib/{os.uname().machine}-linux-gnu/girepository-1.0",
+    ]
+    return any(os.path.exists(os.path.join(d, n)) for d in dirs for n in names)
+
+
+def tray_available() -> bool:
+    return bool(tray_binary()) and tray_typelib_present()
+
+
+def tray_enabled() -> bool:
+    return AUTOSTART_FILE.exists()
+
+
+def _autostart_contents(exec_path: str) -> str:
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=Notion Recorder Tray\n"
+        "Comment=Tray control for the Notion Meeting Mix\n"
+        f"Exec={exec_path}\n"
+        f"Icon={APP_ID}\n"
+        "Terminal=false\n"
+        "NoDisplay=true\n"
+        "X-GNOME-Autostart-enabled=true\n"
+    )
+
+
+def enable_tray() -> bool:
+    """Write the autostart entry and launch the tray now. Returns success."""
+    binary = tray_binary()
+    if not binary:
+        return False
+    try:
+        AUTOSTART_FILE.parent.mkdir(parents=True, exist_ok=True)
+        AUTOSTART_FILE.write_text(_autostart_contents(binary))
+    except OSError:
+        return False
+    try:
+        subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+    return True
+
+
+def disable_tray() -> None:
+    """Remove the autostart entry and stop any running tray."""
+    try:
+        AUTOSTART_FILE.unlink()
+    except OSError:
+        pass
+    # Bracket the first letter so the pkill invocation never matches itself.
+    subprocess.run(["pkill", "-f", "[n]otion-recorder-tray"],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 @dataclass
@@ -219,6 +298,7 @@ class NotionRecorder(Adw.Application):
         self.mic_applied: Gtk.Label | None = None
         self.output_applied: Gtk.Label | None = None
         self.auto_switch: Gtk.Switch | None = None
+        self.tray_switch: Gtk.Switch | None = None
         self.mic_devices: list[Device] = []
         self.output_devices: list[Device] = []
         self.dials: dict[str, AudioDial] = {}
@@ -467,6 +547,7 @@ class NotionRecorder(Adw.Application):
         card.append(save)
 
         card.append(self.build_auto_row())
+        card.append(self.build_tray_row())
 
         page.append(card)
         page.append(self.build_diagram())
@@ -494,6 +575,30 @@ class NotionRecorder(Adw.Application):
         auto_row.append(auto_text)
         auto_row.append(self.auto_switch)
         return auto_row
+
+    def build_tray_row(self) -> Gtk.Widget:
+        tray_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, margin_top=14)
+        tray_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
+        tray_title = Gtk.Label(label="Show a tray icon", xalign=0)
+        tray_title.add_css_class("field-label")
+        tray_hint = Gtk.Label(
+            label="Adds a top-bar menu to start or stop the mix without opening this window.",
+            xalign=0, wrap=True)
+        tray_hint.add_css_class("field-hint")
+        tray_text.append(tray_title)
+        tray_text.append(tray_hint)
+        self.tray_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
+        available = tray_available()
+        # Set initial state before connecting so it never fires the handler.
+        self.tray_switch.set_active(available and tray_enabled())
+        if not available:
+            self.tray_switch.set_sensitive(False)
+            self.tray_switch.set_tooltip_text(
+                "Install gir1.2-ayatanaappindicator3-0.1 to enable the tray icon")
+        self.tray_switch.connect("notify::active", self.on_tray_toggle)
+        tray_row.append(tray_text)
+        tray_row.append(self.tray_switch)
+        return tray_row
 
     @staticmethod
     def labeled(label: str, hint: str, widget: Gtk.Widget) -> Gtk.Widget:
@@ -632,6 +737,19 @@ class NotionRecorder(Adw.Application):
             message = "" if result is None else result.stderr.strip()
             self.detail_label.set_label(message or "Could not change auto-start.")
         return False
+
+    def on_tray_toggle(self, switch: Gtk.Switch, _param) -> None:
+        want = switch.get_active()
+        if want:
+            if not enable_tray():
+                # Revert without re-triggering the handler.
+                switch.handler_block_by_func(self.on_tray_toggle)
+                switch.set_active(False)
+                switch.handler_unblock_by_func(self.on_tray_toggle)
+                if self.detail_label is not None:
+                    self.detail_label.set_label("Could not start the tray icon.")
+        else:
+            disable_tray()
 
     def build_footer(self) -> Gtk.Widget:
         self.footer_label = Gtk.Label(label="Notion: checking for a transcript using the virtual input", xalign=0, wrap=True)

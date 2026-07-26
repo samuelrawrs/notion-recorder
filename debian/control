@@ -17,7 +17,9 @@ Depends: ${misc:Depends},
          gir1.2-gtk-4.0,
          gir1.2-adw-1,
          pulseaudio-utils
-Recommends: pipewire-pulse
+Recommends: pipewire-pulse,
+            gir1.2-ayatanaappindicator3-0.1,
+            gir1.2-gtk-3.0
 Description: No-echo meeting audio input for Notion AI Meeting Notes
  Notion Recorder creates a capture-only PipeWire/PulseAudio virtual microphone
  that mixes your voice with the selected speaker output, so Notion AI Meeting

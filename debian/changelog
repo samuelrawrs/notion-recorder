@@ -1,7 +1,8 @@
 notion-recorder (1.0.0) noble; urgency=medium
 
   * Initial release: guided no-echo meeting mix for Notion AI Meeting Notes,
-    live level meters, friendly device pickers, audio-flow diagram, and an
-    optional mic-activity auto-start daemon.
+    live level meters, friendly device pickers, audio-flow diagram, an optional
+    mic-activity auto-start daemon, and an optional system-tray icon to start or
+    stop the mix from the top bar.
 
  -- samuelrawrs <54682777+samuelrawrs@users.noreply.github.com>  Fri, 24 Jul 2026 10:00:00 +0000

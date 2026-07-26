@@ -25,6 +25,7 @@
       <li>Friendly device pickers, with the currently applied devices always shown</li>
       <li>Capture-only routing that produces no feedback for meeting participants</li>
       <li>Optional mic-activity daemon that auto-starts and stops the mix</li>
+      <li>Optional system-tray icon to start or stop the mix from the top bar</li>
     </ul>
     <p>
       The virtual input can be selected by any application that records from a microphone,

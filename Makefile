@@ -18,11 +18,13 @@ check:
 	bash -n notion-meeting-audio
 	bash -n notion-recorder-daemon
 	python3 -m py_compile notion-recorder.py
+	python3 -m py_compile notion-recorder-tray
 
 install: check
 	install -Dm755 notion-meeting-audio $(BINDIR)/notion-meeting-audio
 	install -Dm755 notion-recorder.py $(BINDIR)/notion-recorder
 	install -Dm755 notion-recorder-daemon $(BINDIR)/notion-recorder-daemon
+	install -Dm755 notion-recorder-tray $(BINDIR)/notion-recorder-tray
 	install -Dm644 notion-recorder.desktop $(APPDIR)/$(APP_ID).desktop
 	install -Dm644 data/$(APP_ID).svg $(ICONDIR)/$(APP_ID).svg
 	install -Dm644 data/$(APP_ID).metainfo.xml $(METAINFODIR)/$(APP_ID).metainfo.xml
@@ -38,6 +40,7 @@ uninstall:
 	rm -f $(BINDIR)/notion-meeting-audio
 	rm -f $(BINDIR)/notion-recorder
 	rm -f $(BINDIR)/notion-recorder-daemon
+	rm -f $(BINDIR)/notion-recorder-tray
 	rm -f $(APPDIR)/$(APP_ID).desktop
 	rm -f $(ICONDIR)/$(APP_ID).svg
 	rm -f $(METAINFODIR)/$(APP_ID).metainfo.xml
