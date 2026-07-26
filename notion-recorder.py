@@ -36,6 +36,106 @@ DEFAULT_OUTPUT_LABEL = "System default speaker output"
 
 DAEMON_UNIT = "notion-recorder-daemon.service"
 
+DEFAULT_THEME = "mint"
+THEME_ORDER = ["mint", "ember"]
+THEME_LABELS = {"mint": "Mint (default)", "ember": "Ember (orange)"}
+
+# Each theme is a flat palette of colour tokens turned into GTK @define-color
+# entries, plus two non-colour keys: "dark" (drives the libadwaita colour
+# scheme so native popovers match) and "font" (optional family override).
+THEMES: dict[str, dict[str, object]] = {
+    "mint": {
+        "dark": False,
+        "font": None,
+        "surface_top": "#f4f7f9", "surface_bottom": "#e8eef2",
+        "ink": "#10201b", "ink_soft": "#64756e",
+        "card": "#ffffff", "card_line": "#e5ece8",
+        "panel_top": "#f0f6f2", "panel_bottom": "#e3efe9", "panel_line": "#e0ebe5",
+        "brand": "#0aa06f", "brand_lit": "#13bd88", "on_brand": "#ffffff", "brand_ink": "#0b7a58",
+        "sw_on": "#ffffff", "sw_on_ink": "#0b7a57",
+        "busy_bg": "#e6ede9", "busy_ink": "#5c6d66",
+        "repair_bg": "rgba(255,255,255,.65)", "repair_line": "#bfe0d1",
+        "sink_bg": "#eef2ff", "sink_line": "#d7defb", "sink_ink": "#3b3ea8",
+    },
+    "ember": {
+        "dark": True,
+        "font": '"URW Gothic", "Avant Garde", "Century Gothic", sans-serif',
+        "surface_top": "#1c1613", "surface_bottom": "#0d0a08",
+        "ink": "#f6efe8", "ink_soft": "#b6a495",
+        "card": "#241d18", "card_line": "#3a2c20",
+        "panel_top": "#251d16", "panel_bottom": "#191410", "panel_line": "#3c2d1f",
+        "brand": "#ec5a1d", "brand_lit": "#f26e2c", "on_brand": "#1a0e05", "brand_ink": "#e78a4c",
+        "sw_on": "#2e241b", "sw_on_ink": "#e78a4c",
+        "busy_bg": "#2a221b", "busy_ink": "#b6a495",
+        "repair_bg": "rgba(255,255,255,.05)", "repair_line": "#4a3826",
+        "sink_bg": "#2a2118", "sink_line": "#4a3826", "sink_ink": "#e5a172",
+    },
+}
+
+_CSS_BODY = """
+  window { background: linear-gradient(to bottom, @surface_top, @surface_bottom); color: @ink; }
+  headerbar { background: transparent; color: @ink; border: 0; box-shadow: none; }
+  .brandmark { border-radius: 7px; margin-left: 4px; }
+  stackswitcher button { min-height: 34px; border-radius: 10px; font-weight: 700; padding: 0 16px; color: @ink_soft; }
+  stackswitcher button:checked { background: @sw_on; color: @sw_on_ink; box-shadow: 0 2px 6px rgba(16,40,33,.10); }
+
+  .state-card { background: @card; border: 1px solid @card_line; border-radius: 16px; padding: 16px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
+  .eyebrow { color: @brand_ink; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+  .state-title { color: @ink; font-size: 20px; font-weight: 800; }
+  .state-detail { color: @ink_soft; font-size: 13px; }
+
+  .dial-card { background: linear-gradient(155deg, @panel_top, @panel_bottom); border: 1px solid @panel_line; border-radius: 16px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+  .dial-value { color: @ink; font-size: 15px; font-weight: 800; }
+  .dial-title { color: @ink_soft; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+
+  .pill { min-height: 38px; border-radius: 11px; font-weight: 800; padding: 0 14px; }
+  .pill:disabled { opacity: 1; }
+  button.start { background: linear-gradient(135deg, @brand_lit, @brand); color: @on_brand; border: 0; box-shadow: 0 4px 12px alpha(@brand, .18); }
+  button.start:hover { background: linear-gradient(135deg, @brand_lit, @brand_lit); }
+  button.stop { background: linear-gradient(135deg, #ff7a7a, #ef4d4d); color: #ffffff; border: 0; box-shadow: 0 8px 18px rgba(226,74,74,.30); }
+  button.stop:hover { background: linear-gradient(135deg, #ff8a8a, #f25a5a); }
+  button.busy { background: @busy_bg; color: @busy_ink; border: 0; box-shadow: none; }
+  button.repair { background: @repair_bg; color: @brand_ink; border: 1px solid @repair_line; box-shadow: none; }
+  button.repair:hover { background: @card; }
+
+  .footer { color: @ink_soft; font-size: 13px; }
+  .important-card { background: #fff7e6; border: 1px solid #f0b429; border-left: 4px solid #f0b429; border-radius: 14px; padding: 12px; box-shadow: 0 6px 16px rgba(146,100,10,.08); }
+  .important-title { color: #8a5a00; font-size: 14px; font-weight: 800; letter-spacing: .01em; }
+  .important-icon { color: #b7791f; }
+  .important-rule { color: #6b4a12; font-size: 12px; }
+  .important-dismiss { min-height: 22px; min-width: 22px; padding: 0; color: #8a5a00; }
+  .unavailable-note { color: #a15c00; font-size: 12px; }
+  .config-card { background: @card; border: 1px solid @card_line; border-radius: 14px; padding: 14px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
+  .field-label { color: @ink; font-size: 13px; font-weight: 800; }
+  .field-hint { color: @ink_soft; font-size: 12px; }
+  .applied { color: @brand_ink; font-size: 12px; font-weight: 700; }
+  dropdown { border-radius: 10px; }
+
+  .flow-wrap { background: linear-gradient(155deg, @panel_top, @panel_bottom); border: 1px solid @panel_line; border-radius: 14px; padding: 14px; }
+  .flow-title { color: @ink; font-size: 14px; font-weight: 800; }
+  .flow-card { background: @card; border: 1px solid @panel_line; border-radius: 11px; padding: 7px 11px; color: @ink; font-weight: 700; box-shadow: 0 3px 8px rgba(17,42,34,.06); }
+  .flow-card.mix { background: linear-gradient(135deg, @brand_lit, @brand); color: @on_brand; border: 0; box-shadow: 0 3px 9px alpha(@brand, .16); }
+  .flow-card.sink { background: @sink_bg; border: 1px solid @sink_line; color: @sink_ink; box-shadow: 0 3px 8px rgba(59,62,168,.10); }
+  .flow-arrow { color: @ink_soft; font-size: 20px; font-weight: 800; }
+  .flow-note { color: @brand_ink; font-size: 12px; font-weight: 700; }
+"""
+
+
+def build_css(theme: str) -> bytes:
+    palette = THEMES.get(theme, THEMES[DEFAULT_THEME])
+    defs = "".join(
+        f"@define-color {key} {value};\n"
+        for key, value in palette.items()
+        if key not in ("dark", "font")
+    )
+    font = palette.get("font")
+    font_rule = f"window {{ font-family: {font}; }}\n" if font else ""
+    return (defs + font_rule + _CSS_BODY).encode()
+
+
+def theme_is_dark(theme: str) -> bool:
+    return bool(THEMES.get(theme, THEMES[DEFAULT_THEME]).get("dark"))
+
 
 def _systemctl(*args: str) -> subprocess.CompletedProcess[str] | None:
     """Run ``systemctl --user``; return None if systemctl itself is unavailable."""
@@ -346,6 +446,11 @@ class NotionRecorder(Adw.Application):
         self.desc_cache: dict[str, str] = {}
         self.desc_cache_at: float = 0.0
         self.paused = False
+        self.theme = read_setting("theme") or DEFAULT_THEME
+        if self.theme not in THEMES:
+            self.theme = DEFAULT_THEME
+        self.css_provider: Gtk.CssProvider | None = None
+        self.theme_dropdown: Gtk.DropDown | None = None
 
     POLL_MS = 1500
     DESC_TTL = 5.0
@@ -354,11 +459,10 @@ class NotionRecorder(Adw.Application):
         if self.window:
             self.window.present()
             return
-        Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_LIGHT)
         Gtk.Window.set_default_icon_name(APP_ID)
         self.load_css()
         self.setup_actions()
-        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=460, default_height=540)
+        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=470, default_height=670)
         self.window.set_icon_name(APP_ID)
         self.window.connect("close-request", self.on_close)
         toolbar = Adw.ToolbarView()
@@ -377,6 +481,7 @@ class NotionRecorder(Adw.Application):
         header.pack_end(menu_button)
         toolbar.add_top_bar(header)
         recorder_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
+        recorder_page.append(self.build_important_card())
         recorder_page.append(self.build_state_card())
         recorder_page.append(self.build_dials())
         recorder_page.append(self.build_footer())
@@ -440,56 +545,40 @@ class NotionRecorder(Adw.Application):
         about.present(self.window)
 
     def load_css(self) -> None:
-        css = b"""
-          window { background: linear-gradient(to bottom, #f4f7f9, #e8eef2); color: #10201b; }
-          headerbar { background: transparent; color: #10201b; border: 0; box-shadow: none; }
-          .brandmark { border-radius: 7px; margin-left: 4px; }
-          stackswitcher button { min-height: 34px; border-radius: 10px; font-weight: 700; padding: 0 16px; }
-          stackswitcher button:checked { background: #ffffff; color: #0b7a57; box-shadow: 0 2px 6px rgba(16,40,33,.10); }
+        self._apply_color_scheme()
+        self._apply_dial_track()
+        self.css_provider = Gtk.CssProvider()
+        self.css_provider.load_from_data(build_css(self.theme))
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), self.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-          .state-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 16px; padding: 16px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
-          .eyebrow { color: #0b9668; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
-          .state-title { color: #10201b; font-size: 20px; font-weight: 800; }
-          .state-detail { color: #64756e; font-size: 13px; }
+    def _apply_color_scheme(self) -> None:
+        scheme = Adw.ColorScheme.FORCE_DARK if theme_is_dark(self.theme) else Adw.ColorScheme.FORCE_LIGHT
+        Adw.StyleManager.get_default().set_color_scheme(scheme)
 
-          .dial-card { background: linear-gradient(155deg, #f0f6f2, #e3efe9); border: 1px solid #e0ebe5; border-radius: 16px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
-          .dial-value { color: #10201b; font-size: 15px; font-weight: 800; }
-          .dial-title { color: #64756e; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+    def _apply_dial_track(self) -> None:
+        # Ring track colour: a soft warm charcoal on dark skins, mint-grey on light.
+        AudioDial.TRACK = (0.26, 0.21, 0.17) if theme_is_dark(self.theme) else (0.87, 0.91, 0.89)
 
-          .pill { min-height: 38px; border-radius: 11px; font-weight: 800; padding: 0 14px; }
-          .pill:disabled { opacity: 1; }
-          button.start { background: linear-gradient(135deg, #13bd88, #0aa06f); color: #ffffff; border: 0; box-shadow: 0 8px 18px rgba(11,150,104,.30); }
-          button.start:hover { background: linear-gradient(135deg, #18c690, #0bab77); }
-          button.stop { background: linear-gradient(135deg, #ff7a7a, #ef4d4d); color: #ffffff; border: 0; box-shadow: 0 8px 18px rgba(226,74,74,.30); }
-          button.stop:hover { background: linear-gradient(135deg, #ff8a8a, #f25a5a); }
-          button.busy { background: #e6ede9; color: #5c6d66; border: 0; box-shadow: none; }
-          button.repair { background: rgba(255,255,255,.65); color: #0b7a58; border: 1px solid #bfe0d1; box-shadow: none; }
-          button.repair:hover { background: #ffffff; }
+    def apply_theme(self, theme: str) -> None:
+        self.theme = theme if theme in THEMES else DEFAULT_THEME
+        write_setting("theme", self.theme)
+        display = Gdk.Display.get_default()
+        if self.css_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, self.css_provider)
+        self._apply_color_scheme()
+        self._apply_dial_track()
+        self.css_provider = Gtk.CssProvider()
+        self.css_provider.load_from_data(build_css(self.theme))
+        Gtk.StyleContext.add_provider_for_display(
+            display, self.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        for dial in self.dials.values():
+            dial.canvas.queue_draw()
 
-          .footer { color: #64756e; font-size: 13px; }
-          .important-card { background: #fff7e6; border: 1px solid #f0b429; border-left: 4px solid #f0b429; border-radius: 14px; padding: 13px; box-shadow: 0 6px 16px rgba(146,100,10,.08); }
-          .important-title { color: #8a5a00; font-size: 14px; font-weight: 800; letter-spacing: .01em; }
-          .important-icon { color: #b7791f; }
-          .important-rule { color: #6b4a12; font-size: 12px; }
-          .important-dismiss { min-height: 22px; min-width: 22px; padding: 0; color: #8a5a00; }
-          .unavailable-note { color: #a15c00; font-size: 12px; }
-          .config-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 14px; padding: 14px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
-          .field-label { color: #10201b; font-size: 13px; font-weight: 800; }
-          .field-hint { color: #64756e; font-size: 12px; }
-          .applied { color: #0b7a58; font-size: 12px; font-weight: 700; }
-          dropdown { border-radius: 10px; }
-
-          .flow-wrap { background: linear-gradient(155deg, #f0f6f2, #e4efe9); border: 1px solid #e0ebe5; border-radius: 14px; padding: 14px; }
-          .flow-title { color: #10201b; font-size: 14px; font-weight: 800; }
-          .flow-card { background: #ffffff; border: 1px solid #dbe6e0; border-radius: 11px; padding: 7px 11px; color: #10201b; font-weight: 700; box-shadow: 0 3px 8px rgba(17,42,34,.06); }
-          .flow-card.mix { background: linear-gradient(135deg, #13bd88, #0aa06f); color: #ffffff; border: 0; box-shadow: 0 6px 14px rgba(11,150,104,.28); }
-          .flow-card.sink { background: #eef2ff; border: 1px solid #d7defb; color: #3b3ea8; box-shadow: 0 3px 8px rgba(59,62,168,.10); }
-          .flow-arrow { color: #9aa8a1; font-size: 20px; font-weight: 800; }
-          .flow-note { color: #0b7a58; font-size: 12px; font-weight: 700; }
-        """
-        provider = Gtk.CssProvider()
-        provider.load_from_data(css)
-        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+    def on_theme_changed(self, dropdown: Gtk.DropDown, _param) -> None:
+        index = dropdown.get_selected()
+        if 0 <= index < len(THEME_ORDER):
+            self.apply_theme(THEME_ORDER[index])
 
     def build_state_card(self) -> Gtk.Widget:
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -528,13 +617,13 @@ class NotionRecorder(Adw.Application):
         return card
 
     def build_important_card(self) -> Gtk.Widget:
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         card.add_css_class("important-card")
         self.important_card = card
         heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
         icon.add_css_class("important-icon")
-        title = Gtk.Label(label="Important \u2014 read before your first call", xalign=0, hexpand=True)
+        title = Gtk.Label(label="Read before your first call", xalign=0, hexpand=True)
         title.add_css_class("important-title")
         dismiss = Gtk.Button(icon_name="window-close-symbolic", valign=Gtk.Align.START,
                              tooltip_text="Dismiss (reopen from the menu)")
@@ -546,9 +635,9 @@ class NotionRecorder(Adw.Application):
         heading.append(dismiss)
         card.append(heading)
         rules = [
-            ("In Notion", "choose \u201cNotion Meeting Mix\u201d as the microphone (not \u201cDefault\u201d)."),
-            ("In Google Meet, Zoom, Teams", "keep your physical microphone selected. Never choose Notion Meeting Mix, or participants will hear an echo."),
-            ("Headphones", "wear headphones so the meeting audio is not re-captured by your microphone."),
+            ("In Notion", "pick \u201cNotion Meeting Mix\u201d as the mic."),
+            ("In Meet / Zoom / Teams", "keep your real mic \u2014 never the Mix, or people hear echo."),
+            ("Headphones", "wear them so meeting audio isn\u2019t re-captured."),
         ]
         for lead, rest in rules:
             rule = Gtk.Label(xalign=0, wrap=True)
@@ -570,7 +659,6 @@ class NotionRecorder(Adw.Application):
 
     def build_config_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
-        page.append(self.build_important_card())
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.add_css_class("config-card")
         title = Gtk.Label(label="Choose what Notion receives", xalign=0)
@@ -610,9 +698,25 @@ class NotionRecorder(Adw.Application):
         card.append(save)
 
         page.append(card)
+        page.append(self.build_appearance_card())
         page.append(self.build_automation_card())
         page.append(self.build_diagram())
         return page
+
+    def build_appearance_card(self) -> Gtk.Widget:
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("config-card")
+        title = Gtk.Label(label="Appearance", xalign=0)
+        title.add_css_class("state-title")
+        note = Gtk.Label(label="Pick a skin. It applies instantly and is remembered.", xalign=0, wrap=True)
+        note.add_css_class("state-detail")
+        card.append(title)
+        card.append(note)
+        self.theme_dropdown = Gtk.DropDown.new_from_strings([THEME_LABELS[k] for k in THEME_ORDER])
+        self.theme_dropdown.set_selected(THEME_ORDER.index(self.theme) if self.theme in THEME_ORDER else 0)
+        self.theme_dropdown.connect("notify::selected", self.on_theme_changed)
+        card.append(self.labeled("Skin", "The colour theme for this window.", self.theme_dropdown))
+        return card
 
     @staticmethod
     def switch_row(title: str, hint: str, switch: Gtk.Switch) -> Gtk.Box:
