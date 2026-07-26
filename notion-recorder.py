@@ -138,6 +138,41 @@ def disable_tray() -> None:
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+SETTINGS_FILE = Path.home() / ".config" / "notion-recorder" / "settings.conf"
+
+
+def read_setting(key: str) -> str:
+    try:
+        for line in SETTINGS_FILE.read_text().splitlines():
+            if line.startswith(f"{key}="):
+                return line[len(key) + 1:].strip()
+    except OSError:
+        pass
+    return ""
+
+
+def write_setting(key: str, value: str) -> None:
+    lines: list[str] = []
+    try:
+        lines = SETTINGS_FILE.read_text().splitlines()
+    except OSError:
+        pass
+    out, found = [], False
+    for line in lines:
+        if line.startswith(f"{key}="):
+            out.append(f"{key}={value}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f"{key}={value}")
+    try:
+        SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SETTINGS_FILE.write_text("\n".join(out) + "\n")
+    except OSError:
+        pass
+
+
 @dataclass
 class Device:
     name: str
@@ -299,6 +334,7 @@ class NotionRecorder(Adw.Application):
         self.output_applied: Gtk.Label | None = None
         self.auto_switch: Gtk.Switch | None = None
         self.tray_switch: Gtk.Switch | None = None
+        self.important_card: Gtk.Widget | None = None
         self.mic_devices: list[Device] = []
         self.output_devices: list[Device] = []
         self.dials: dict[str, AudioDial] = {}
@@ -334,6 +370,7 @@ class NotionRecorder(Adw.Application):
         switcher = Gtk.StackSwitcher(stack=stack)
         header.set_title_widget(switcher)
         menu = Gio.Menu()
+        menu.append("Show first-call tips", "app.tips")
         menu.append(f"About {APP_NAME}", "app.about")
         menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu")
         header.pack_end(menu_button)
@@ -373,6 +410,9 @@ class NotionRecorder(Adw.Application):
         about = Gio.SimpleAction.new("about", None)
         about.connect("activate", self.show_about)
         self.add_action(about)
+        tips = Gio.SimpleAction.new("tips", None)
+        tips.connect("activate", self.show_tips)
+        self.add_action(tips)
 
     def show_about(self, *_args) -> None:
         about = Adw.AboutDialog(
@@ -428,6 +468,8 @@ class NotionRecorder(Adw.Application):
           .important-title { color: #8a5a00; font-size: 16px; font-weight: 800; letter-spacing: .01em; }
           .important-icon { color: #b7791f; }
           .important-rule { color: #6b4a12; font-size: 13px; }
+          .important-dismiss { min-height: 24px; min-width: 24px; padding: 2px; color: #8a5a00; }
+          .unavailable-note { color: #a15c00; font-size: 12px; }
           .config-card { background: #ffffff; border: 1px solid #e5ece8; border-radius: 22px; padding: 22px; box-shadow: 0 10px 30px rgba(17,42,34,.07); }
           .field-label { color: #10201b; font-size: 14px; font-weight: 800; }
           .field-hint { color: #64756e; font-size: 12px; }
@@ -485,13 +527,20 @@ class NotionRecorder(Adw.Application):
     def build_important_card(self) -> Gtk.Widget:
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         card.add_css_class("important-card")
+        self.important_card = card
         heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
         icon.add_css_class("important-icon")
-        title = Gtk.Label(label="Important \u2014 read before your first call", xalign=0)
+        title = Gtk.Label(label="Important \u2014 read before your first call", xalign=0, hexpand=True)
         title.add_css_class("important-title")
+        dismiss = Gtk.Button(icon_name="window-close-symbolic", valign=Gtk.Align.START,
+                             tooltip_text="Dismiss (reopen from the menu)")
+        dismiss.add_css_class("flat")
+        dismiss.add_css_class("important-dismiss")
+        dismiss.connect("clicked", self.on_dismiss_important)
         heading.append(icon)
         heading.append(title)
+        heading.append(dismiss)
         card.append(heading)
         rules = [
             ("In Notion", "choose \u201cNotion Meeting Mix\u201d as the microphone (not \u201cDefault\u201d)."),
@@ -503,7 +552,18 @@ class NotionRecorder(Adw.Application):
             rule.add_css_class("important-rule")
             rule.set_markup(f"<b>{GLib.markup_escape_text(lead)}:</b> {GLib.markup_escape_text(rest)}")
             card.append(rule)
+        card.set_visible(read_setting("important_dismissed") != "1")
         return card
+
+    def on_dismiss_important(self, _button: Gtk.Button) -> None:
+        write_setting("important_dismissed", "1")
+        if self.important_card is not None:
+            self.important_card.set_visible(False)
+
+    def show_tips(self, *_args) -> None:
+        write_setting("important_dismissed", "0")
+        if self.important_card is not None:
+            self.important_card.set_visible(True)
 
     def build_config_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14, margin_top=24, margin_bottom=24, margin_start=28, margin_end=28)
@@ -546,59 +606,77 @@ class NotionRecorder(Adw.Application):
         save.connect("clicked", self.apply_config)
         card.append(save)
 
-        card.append(self.build_auto_row())
-        card.append(self.build_tray_row())
-
         page.append(card)
+        page.append(self.build_automation_card())
         page.append(self.build_diagram())
         return page
 
+    @staticmethod
+    def switch_row(title: str, hint: str, switch: Gtk.Switch) -> Gtk.Box:
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
+        label = Gtk.Label(label=title, xalign=0)
+        label.add_css_class("field-label")
+        sub = Gtk.Label(label=hint, xalign=0, wrap=True)
+        sub.add_css_class("field-hint")
+        text.append(label)
+        text.append(sub)
+        row.append(text)
+        row.append(switch)
+        return row
+
+    @staticmethod
+    def unavailable_note(text: str) -> Gtk.Widget:
+        note = Gtk.Label(label=text, xalign=0, wrap=True)
+        note.add_css_class("unavailable-note")
+        return note
+
     def build_auto_row(self) -> Gtk.Widget:
-        auto_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, margin_top=14)
-        auto_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
-        auto_title = Gtk.Label(label="Auto-start when I use the mic", xalign=0)
-        auto_title.add_css_class("field-label")
-        auto_hint = Gtk.Label(
-            label="Starts the mix automatically during calls, via a background service.",
-            xalign=0, wrap=True)
-        auto_hint.add_css_class("field-hint")
-        auto_text.append(auto_title)
-        auto_text.append(auto_hint)
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=14)
         self.auto_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         available = daemon_available()
         # Set the initial state before connecting so it never fires the handler.
         self.auto_switch.set_active(available and daemon_enabled())
+        self.auto_switch.connect("notify::active", self.on_auto_toggle)
+        container.append(self.switch_row(
+            "Auto-start when I use the mic",
+            "Starts the mix automatically during calls, via a background service.",
+            self.auto_switch))
         if not available:
             self.auto_switch.set_sensitive(False)
-            self.auto_switch.set_tooltip_text("Install the app to enable auto-start")
-        self.auto_switch.connect("notify::active", self.on_auto_toggle)
-        auto_row.append(auto_text)
-        auto_row.append(self.auto_switch)
-        return auto_row
+            container.append(self.unavailable_note(
+                "Available once Notion Recorder is installed from the package, which registers the background service."))
+        return container
 
     def build_tray_row(self) -> Gtk.Widget:
-        tray_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12, margin_top=14)
-        tray_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True)
-        tray_title = Gtk.Label(label="Show a tray icon", xalign=0)
-        tray_title.add_css_class("field-label")
-        tray_hint = Gtk.Label(
-            label="Adds a top-bar menu to start or stop the mix without opening this window.",
-            xalign=0, wrap=True)
-        tray_hint.add_css_class("field-hint")
-        tray_text.append(tray_title)
-        tray_text.append(tray_hint)
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=14)
         self.tray_switch = Gtk.Switch(valign=Gtk.Align.CENTER)
         available = tray_available()
         # Set initial state before connecting so it never fires the handler.
         self.tray_switch.set_active(available and tray_enabled())
+        self.tray_switch.connect("notify::active", self.on_tray_toggle)
+        container.append(self.switch_row(
+            "Show a tray icon",
+            "Adds a top-bar menu to start or stop the mix without opening this window.",
+            self.tray_switch))
         if not available:
             self.tray_switch.set_sensitive(False)
-            self.tray_switch.set_tooltip_text(
-                "Install gir1.2-ayatanaappindicator3-0.1 to enable the tray icon")
-        self.tray_switch.connect("notify::active", self.on_tray_toggle)
-        tray_row.append(tray_text)
-        tray_row.append(self.tray_switch)
-        return tray_row
+            container.append(self.unavailable_note(
+                "Install gir1.2-ayatanaappindicator3-0.1 (and, on GNOME, the AppIndicator extension) to enable the tray icon."))
+        return container
+
+    def build_automation_card(self) -> Gtk.Widget:
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        card.add_css_class("config-card")
+        title = Gtk.Label(label="Automation", xalign=0)
+        title.add_css_class("state-title")
+        note = Gtk.Label(label="Optional conveniences. Both stay off until you switch them on.", xalign=0, wrap=True)
+        note.add_css_class("state-detail")
+        card.append(title)
+        card.append(note)
+        card.append(self.build_auto_row())
+        card.append(self.build_tray_row())
+        return card
 
     @staticmethod
     def labeled(label: str, hint: str, widget: Gtk.Widget) -> Gtk.Widget:

@@ -11,8 +11,15 @@ BINDIR = $(DESTDIR)$(PREFIX)/bin
 APPDIR = $(DESTDIR)$(PREFIX)/share/applications
 ICONDIR = $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps
 METAINFODIR = $(DESTDIR)$(PREFIX)/share/metainfo
-# System-installed systemd *user* units live here; `systemctl --user` searches it.
+# systemd user-unit search path differs by prefix: /usr uses lib/systemd/user
+# (the packaging convention dh_installsystemduser expects), while a per-user
+# prefix like ~/.local must use share/systemd/user ($XDG_DATA_HOME), which
+# `systemctl --user` scans. lib/systemd/user under ~/.local is NOT scanned.
+ifeq ($(PREFIX),/usr)
 USERUNITDIR = $(DESTDIR)$(PREFIX)/lib/systemd/user
+else
+USERUNITDIR = $(DESTDIR)$(PREFIX)/share/systemd/user
+endif
 
 check:
 	bash -n notion-meeting-audio
@@ -29,6 +36,8 @@ install: check
 	install -Dm644 data/$(APP_ID).svg $(ICONDIR)/$(APP_ID).svg
 	install -Dm644 data/$(APP_ID).metainfo.xml $(METAINFODIR)/$(APP_ID).metainfo.xml
 	install -Dm644 data/notion-recorder-daemon.service $(USERUNITDIR)/notion-recorder-daemon.service
+	@# Point ExecStart at the actual install prefix (runtime path, no DESTDIR).
+	sed -i 's|^ExecStart=.*|ExecStart=$(PREFIX)/bin/notion-recorder-daemon|' $(USERUNITDIR)/notion-recorder-daemon.service
 	@# Refresh caches only for a direct local install; during packaging (DESTDIR
 	@# set) dpkg triggers regenerate them, so shipping cache files would be wrong.
 	@if [ -z "$(DESTDIR)" ]; then \
