@@ -41,7 +41,7 @@ ZOOM_MIN, ZOOM_MAX, ZOOM_STEP = 0.7, 1.8, 0.1
 FIRST_CALL_RULES = [
     ("In Notion", "pick \u201cNotion Meeting Mix\u201d as the microphone."),
     ("In Meet / Zoom / Teams", "keep your real microphone. Never pick the Mix, or people hear echo."),
-    ("Headphones", "recommended, so your speakers don\u2019t feed audio back into the mic."),
+    ("Headphones (recommended)", "keeps your speakers from feeding audio back into the mic. Not required."),
 ]
 
 DAEMON_UNIT = "notion-recorder-daemon.service"
@@ -523,7 +523,7 @@ class NotionRecorder(Adw.Application):
         brand.set_pixel_size(24)
         brand.add_css_class("brandmark")
         header.pack_start(brand)
-        stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, vhomogeneous=False)
         switcher = Gtk.StackSwitcher(stack=stack)
         header.set_title_widget(switcher)
         menu = Gio.Menu()

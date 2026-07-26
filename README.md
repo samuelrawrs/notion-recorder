@@ -44,7 +44,7 @@ sudo apt install ./notion-recorder_1.0.0_all.deb
 
 ## Use for a meeting
 
-1. Connect and select your external microphone and headphones.
+1. Select your microphone (headphones recommended, not required).
 2. Open **Notion Recorder** and start the mix.
 3. In Notion, begin a fresh transcript and select **Notion Meeting Mix** as the microphone.
 4. Google Meet, Zoom, and Teams keep using your physical microphone automatically. The mix never changes your system default input, so participants can never hear an echo.
