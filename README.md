@@ -1,96 +1,78 @@
-# Notion Recorder
+<p align="center">
+  <img src="data/io.github.samuelrawrs.NotionRecorder.svg" width="92" alt="Notion Recorder logo">
+</p>
 
-No-echo meeting audio for **Notion AI Meeting Notes** on Linux.
+<h1 align="center">Notion Recorder</h1>
 
-Notion Recorder creates a capture-only PipeWire/PulseAudio virtual microphone
-(**Notion Meeting Mix**) that blends your physical microphone with the selected
-speaker output, so Notion transcribes both sides of a call from a single input.
-The mix is never routed back to playback, so remote participants never hear an
-echo, and your system default microphone is left untouched (Google Meet, Zoom
-and Teams keep using it unchanged).
+<p align="center"><b>No-echo meeting audio for Notion AI Meeting Notes, on Linux.</b></p>
 
-It ships as a GTK4/libadwaita app with live level meters, friendly device
-pickers, an audio-flow diagram, an optional mic-activity daemon that can
-auto-start and stop the mix around your calls, and an optional system-tray icon.
+<p align="center">
+  <a href="https://github.com/samuelrawrs/notion-recorder/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/samuelrawrs/notion-recorder?label=release&color=0aa06f"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/Linux-PipeWire%20%2F%20PulseAudio-0aa06f">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/samuelrawrs/notion-recorder?color=64756e"></a>
+</p>
 
-> Requires a Debian/Ubuntu system with PipeWire (`pipewire-pulse`) or PulseAudio.
+<p align="center">
+  <img src="docs/flow.svg" width="720" alt="Your mic and meeting audio mix into a capture-only Notion Meeting Mix that Notion transcribes">
+</p>
+
+Notion Recorder builds one **capture-only** virtual microphone, **Notion Meeting Mix**,
+that blends your microphone with your call and system audio. Notion transcribes both
+sides from that single input. The mix is never played back to your speakers, so remote
+participants hear no echo, and your real microphone stays selected in Meet, Zoom, and Teams.
+
+> Needs a Debian/Ubuntu system with PipeWire (`pipewire-pulse`) or PulseAudio.
 
 ## Install
 
-### Recommended: apt repository
-
-Gets you `apt install notion-recorder` and automatic updates via `apt upgrade`.
+Recommended: the apt repository, so you get updates with `apt upgrade`.
 
 ```bash
 curl -fsSL https://samuelrawrs.github.io/notion-recorder/notion-recorder.gpg \
   | sudo tee /usr/share/keyrings/notion-recorder.gpg >/dev/null
 echo "deb [signed-by=/usr/share/keyrings/notion-recorder.gpg] https://samuelrawrs.github.io/notion-recorder stable main" \
   | sudo tee /etc/apt/sources.list.d/notion-recorder.list
-sudo apt update
-sudo apt install notion-recorder
+sudo apt update && sudo apt install notion-recorder
 ```
 
-### Or: a single .deb
+<details>
+<summary>Prefer a single <code>.deb</code>?</summary>
 
-Grab `notion-recorder_<version>_all.deb` from the
-[Releases page](https://github.com/samuelrawrs/notion-recorder/releases) and:
+Download `notion-recorder_<version>_all.deb` from the
+[Releases page](https://github.com/samuelrawrs/notion-recorder/releases), then:
 
 ```bash
 sudo apt install ./notion-recorder_1.0.0_all.deb
 ```
+</details>
 
-`apt` pulls the dependencies (`pulseaudio-utils`, `python3-gi`, `gir1.2-gtk-4.0`,
-`gir1.2-adw-1`, and cairo bindings) automatically either way.
+## Use in a meeting
 
-## Use for a meeting
+1. Open **Notion Recorder** and **Start** the mix (headphones recommended, not required).
+2. In Notion, start a fresh transcript and pick **Notion Meeting Mix** as the microphone.
+3. Talk and meet as usual. Meet, Zoom, and Teams keep using your real mic, so no echo.
+4. When done, stop the transcript in Notion, then **Stop** the mix.
 
-1. Select your microphone (headphones recommended, not required).
-2. Open **Notion Recorder** and start the mix.
-3. In Notion, begin a fresh transcript and select **Notion Meeting Mix** as the microphone.
-4. Google Meet, Zoom, and Teams keep using your physical microphone automatically. The mix never changes your system default input, so participants can never hear an echo.
-5. When done, stop transcription in Notion, then stop the mix.
+> Changed your mic or speakers? Stop the transcript, restart the mix, reload Notion, start a fresh transcript.
 
-If you change microphone or output device, stop transcription, restart the mix,
-hard-reload Notion, then begin a fresh transcript.
+## Optional extras
 
-**Verify:** say a short phrase, then play a few seconds of a YouTube clip through
-the selected headphones. Both should appear in Notion, and remote participants
-must not hear their own speech echoed back.
+| Feature | What it does |
+| --- | --- |
+| **Auto-start** | A background service starts and stops the mix around your calls. Off by default; toggle it in Configuration. |
+| **Tray icon** | A top-bar menu to start or stop the mix without opening the window. Off by default. On GNOME, needs the AppIndicator extension. |
+| **Skins & zoom** | Mint, Snow, Dark, and Ember themes; zoom with `Ctrl` `+` / `-` / `0`. |
 
-## Auto-start (optional)
+<details>
+<summary>Command line, uninstall, and build from source</summary>
 
-A background daemon can start the mix automatically when it detects an app
-capturing your microphone (a call starting) and stop it shortly after the call
-ends. It is **off by default**. Toggle it from the app's Configuration page, or
-manually:
-
-```bash
-systemctl --user enable --now notion-recorder-daemon.service   # enable
-systemctl --user disable --now notion-recorder-daemon.service  # disable
-```
-
-The daemon only reads stream metadata from `pactl`; it never inspects audio
-samples, and it only auto-stops a mix that it started itself.
-
-## Tray icon (optional)
-
-Turn on **Show a tray icon** on the Configuration page to add a top-bar menu
-that starts or stops the mix without opening the main window, and survives
-closing it. It runs as a small separate helper (`notion-recorder-tray`) and
-starts automatically on login while enabled.
-
-The tray needs an AppIndicator typelib (`gir1.2-ayatanaappindicator3-0.1`),
-which the package recommends and `apt` installs by default. On GNOME it also
-needs the AppIndicator shell extension (preinstalled on Ubuntu); most other
-desktops (KDE, Cinnamon, Budgie, XFCE, MATE) show it natively.
-
-## Command line
+**Command line**
 
 ```bash
 notion-meeting-audio start | stop | restart | status | toggle
 ```
 
-## Uninstall
+**Uninstall**
 
 ```bash
 sudo apt remove notion-recorder
@@ -98,25 +80,23 @@ sudo apt remove notion-recorder
 sudo rm -f /etc/apt/sources.list.d/notion-recorder.list /usr/share/keyrings/notion-recorder.gpg
 ```
 
-## Build from source
+**Build from source**
 
 ```bash
-make deb                 # build notion-recorder_<version>_all.deb into ../
+make deb                             # build the .deb into ../
 sudo apt install ../notion-recorder_*.deb
-
-# or install straight into a prefix without packaging:
-sudo make install                    # into /usr
+# or install into a prefix without packaging:
 make install PREFIX=$HOME/.local     # per-user, no root
 ```
 
-Releases and the apt repository are produced automatically by
-`.github/workflows/release.yml` when a `v*.*.*` tag is pushed (see the workflow
-for the one-time `GPG_PRIVATE_KEY` secret and GitHub Pages setup).
+Pushing a `v*.*.*` tag builds the `.deb`, refreshes the signed apt repository, and
+creates the GitHub Release automatically (`.github/workflows/release.yml`).
+</details>
 
 ## Consent
 
-Obtain the consent required by the participants and applicable law before
-recording or transcribing a meeting.
+Get the consent required by participants and applicable law before recording or
+transcribing a meeting.
 
 ## License
 
