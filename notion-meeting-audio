@@ -110,14 +110,14 @@ start() {
   stop
   source="$(selected_source)"
   sink="$(selected_sink)"
-  null_id="$(pactl load-module module-null-sink sink_name="$MIX_SINK" sink_properties='device.description=Notion Meeting Mix')"
+  null_id="$(pactl load-module module-null-sink sink_name="$MIX_SINK" "sink_properties=\"device.description='Notion Meeting Mix'\"")"
   if ! mic_id="$(pactl load-module module-loopback source="$source" sink="$MIX_SINK" latency_msec=20)"; then
     pactl unload-module "$null_id" || true; exit 1
   fi
   if ! output_id="$(pactl load-module module-loopback source="$sink.monitor" sink="$MIX_SINK" latency_msec=20)"; then
     pactl unload-module "$mic_id" || true; pactl unload-module "$null_id" || true; exit 1
   fi
-  if ! remap_id="$(pactl load-module module-remap-source master="$MIX_SINK.monitor" source_name="$MIX_SOURCE" source_properties='device.description=Notion Meeting Mix')"; then
+  if ! remap_id="$(pactl load-module module-remap-source master="$MIX_SINK.monitor" source_name="$MIX_SOURCE" "source_properties=\"device.description='Notion Meeting Mix'\"")"; then
     pactl unload-module "$output_id" || true; pactl unload-module "$mic_id" || true; pactl unload-module "$null_id" || true; exit 1
   fi
   printf 'Notion Meeting Mix is ready.\n'

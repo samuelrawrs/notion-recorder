@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -34,11 +35,25 @@ MIX_SOURCE = "notion_meeting_mix_source"
 DEFAULT_MIC_LABEL = "System default microphone"
 DEFAULT_OUTPUT_LABEL = "System default speaker output"
 
+ZOOM_MIN, ZOOM_MAX, ZOOM_STEP = 0.7, 1.8, 0.1
+
+# Shown once on startup (and on demand) as a dialog before the first call.
+FIRST_CALL_RULES = [
+    ("In Notion", "pick \u201cNotion Meeting Mix\u201d as the microphone."),
+    ("In Meet / Zoom / Teams", "keep your real microphone. Never pick the Mix, or people hear echo."),
+    ("Headphones", "recommended, so your speakers don\u2019t feed audio back into the mic."),
+]
+
 DAEMON_UNIT = "notion-recorder-daemon.service"
 
 DEFAULT_THEME = "mint"
-THEME_ORDER = ["mint", "ember"]
-THEME_LABELS = {"mint": "Mint (default)", "ember": "Ember (orange)"}
+THEME_ORDER = ["mint", "snow", "dark", "ember"]
+THEME_LABELS = {
+    "mint": "Mint (default)",
+    "snow": "Snow (light)",
+    "dark": "Dark",
+    "ember": "Ember (orange)",
+}
 
 # Each theme is a flat palette of colour tokens turned into GTK @define-color
 # entries, plus two non-colour keys: "dark" (drives the libadwaita colour
@@ -56,6 +71,32 @@ THEMES: dict[str, dict[str, object]] = {
         "busy_bg": "#e6ede9", "busy_ink": "#5c6d66",
         "repair_bg": "rgba(255,255,255,.65)", "repair_line": "#bfe0d1",
         "sink_bg": "#eef2ff", "sink_line": "#d7defb", "sink_ink": "#3b3ea8",
+    },
+    "snow": {
+        "dark": False,
+        "font": None,
+        "surface_top": "#ffffff", "surface_bottom": "#eef1f4",
+        "ink": "#111827", "ink_soft": "#6b7280",
+        "card": "#ffffff", "card_line": "#e5e7eb",
+        "panel_top": "#fbfcfd", "panel_bottom": "#f2f4f7", "panel_line": "#e5e7eb",
+        "brand": "#2563eb", "brand_lit": "#3b82f6", "on_brand": "#ffffff", "brand_ink": "#2563eb",
+        "sw_on": "#ffffff", "sw_on_ink": "#2563eb",
+        "busy_bg": "#eef0f3", "busy_ink": "#6b7280",
+        "repair_bg": "rgba(255,255,255,.7)", "repair_line": "#d1d5db",
+        "sink_bg": "#eef2ff", "sink_line": "#dbe3ff", "sink_ink": "#3b3ea8",
+    },
+    "dark": {
+        "dark": True,
+        "font": None,
+        "surface_top": "#1b1e24", "surface_bottom": "#111318",
+        "ink": "#e7eaf0", "ink_soft": "#9aa3b2",
+        "card": "#22262e", "card_line": "#333945",
+        "panel_top": "#23272f", "panel_bottom": "#191c22", "panel_line": "#343a46",
+        "brand": "#4f8cff", "brand_lit": "#6ba0ff", "on_brand": "#ffffff", "brand_ink": "#7aa8ff",
+        "sw_on": "#262b34", "sw_on_ink": "#7aa8ff",
+        "busy_bg": "#262b34", "busy_ink": "#9aa3b2",
+        "repair_bg": "rgba(255,255,255,.05)", "repair_line": "#3a4150",
+        "sink_bg": "#202634", "sink_line": "#33405c", "sink_ink": "#93b4ff",
     },
     "ember": {
         "dark": True,
@@ -80,13 +121,13 @@ _CSS_BODY = """
   stackswitcher button:checked { background: @sw_on; color: @sw_on_ink; box-shadow: 0 2px 6px rgba(16,40,33,.10); }
 
   .state-card { background: @card; border: 1px solid @card_line; border-radius: 16px; padding: 16px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
-  .eyebrow { color: @brand_ink; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
-  .state-title { color: @ink; font-size: 20px; font-weight: 800; }
-  .state-detail { color: @ink_soft; font-size: 13px; }
+  .eyebrow { color: @brand_ink; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+  .state-title { color: @ink; font-size: 21px; font-weight: 800; }
+  .state-detail { color: @ink_soft; font-size: 14px; }
 
   .dial-card { background: linear-gradient(155deg, @panel_top, @panel_bottom); border: 1px solid @panel_line; border-radius: 16px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
-  .dial-value { color: @ink; font-size: 15px; font-weight: 800; }
-  .dial-title { color: @ink_soft; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+  .dial-value { color: @ink; font-size: 16px; font-weight: 800; }
+  .dial-title { color: @ink_soft; font-size: 13px; font-weight: 700; letter-spacing: .02em; }
 
   .pill { min-height: 38px; border-radius: 11px; font-weight: 800; padding: 0 14px; }
   .pill:disabled { opacity: 1; }
@@ -98,30 +139,30 @@ _CSS_BODY = """
   button.repair { background: @repair_bg; color: @brand_ink; border: 1px solid @repair_line; box-shadow: none; }
   button.repair:hover { background: @card; }
 
-  .footer { color: @ink_soft; font-size: 13px; }
+  .footer { color: @ink_soft; font-size: 14px; }
   .important-card { background: #fff7e6; border: 1px solid #f0b429; border-left: 4px solid #f0b429; border-radius: 14px; padding: 12px; box-shadow: 0 6px 16px rgba(146,100,10,.08); }
   .important-title { color: #8a5a00; font-size: 14px; font-weight: 800; letter-spacing: .01em; }
   .important-icon { color: #b7791f; }
   .important-rule { color: #6b4a12; font-size: 12px; }
   .important-dismiss { min-height: 22px; min-width: 22px; padding: 0; color: #8a5a00; }
-  .unavailable-note { color: #a15c00; font-size: 12px; }
+  .unavailable-note { color: #a15c00; font-size: 13px; }
   .config-card { background: @card; border: 1px solid @card_line; border-radius: 14px; padding: 14px; box-shadow: 0 6px 16px rgba(17,42,34,.06); }
-  .field-label { color: @ink; font-size: 13px; font-weight: 800; }
-  .field-hint { color: @ink_soft; font-size: 12px; }
-  .applied { color: @brand_ink; font-size: 12px; font-weight: 700; }
+  .field-label { color: @ink; font-size: 14px; font-weight: 700; }
+  .field-hint { color: @ink_soft; font-size: 13px; }
+  .applied { color: @brand_ink; font-size: 13px; font-weight: 700; }
   dropdown { border-radius: 10px; }
 
   .flow-wrap { background: linear-gradient(155deg, @panel_top, @panel_bottom); border: 1px solid @panel_line; border-radius: 14px; padding: 14px; }
-  .flow-title { color: @ink; font-size: 14px; font-weight: 800; }
+  .flow-title { color: @ink; font-size: 15px; font-weight: 800; }
   .flow-card { background: @card; border: 1px solid @panel_line; border-radius: 11px; padding: 7px 11px; color: @ink; font-weight: 700; box-shadow: 0 3px 8px rgba(17,42,34,.06); }
   .flow-card.mix { background: linear-gradient(135deg, @brand_lit, @brand); color: @on_brand; border: 0; box-shadow: 0 3px 9px alpha(@brand, .16); }
   .flow-card.sink { background: @sink_bg; border: 1px solid @sink_line; color: @sink_ink; box-shadow: 0 3px 8px rgba(59,62,168,.10); }
   .flow-arrow { color: @ink_soft; font-size: 20px; font-weight: 800; }
-  .flow-note { color: @brand_ink; font-size: 12px; font-weight: 700; }
+  .flow-note { color: @brand_ink; font-size: 13px; font-weight: 600; }
 """
 
 
-def build_css(theme: str) -> bytes:
+def build_css(theme: str, zoom: float = 1.0) -> bytes:
     palette = THEMES.get(theme, THEMES[DEFAULT_THEME])
     defs = "".join(
         f"@define-color {key} {value};\n"
@@ -130,7 +171,14 @@ def build_css(theme: str) -> bytes:
     )
     font = palette.get("font")
     font_rule = f"window {{ font-family: {font}; }}\n" if font else ""
-    return (defs + font_rule + _CSS_BODY).encode()
+    body = _CSS_BODY
+    if abs(zoom - 1.0) > 0.001:
+        body = re.sub(
+            r"font-size:\s*(\d+)px",
+            lambda m: f"font-size: {max(1, round(int(m.group(1)) * zoom))}px",
+            body,
+        )
+    return (defs + font_rule + body).encode()
 
 
 def theme_is_dark(theme: str) -> bool:
@@ -435,7 +483,6 @@ class NotionRecorder(Adw.Application):
         self.output_applied: Gtk.Label | None = None
         self.auto_switch: Gtk.Switch | None = None
         self.tray_switch: Gtk.Switch | None = None
-        self.important_card: Gtk.Widget | None = None
         self.mic_devices: list[Device] = []
         self.output_devices: list[Device] = []
         self.dials: dict[str, AudioDial] = {}
@@ -451,6 +498,11 @@ class NotionRecorder(Adw.Application):
             self.theme = DEFAULT_THEME
         self.css_provider: Gtk.CssProvider | None = None
         self.theme_dropdown: Gtk.DropDown | None = None
+        try:
+            self.zoom = float(read_setting("zoom") or "1.0")
+        except ValueError:
+            self.zoom = 1.0
+        self.zoom = max(ZOOM_MIN, min(ZOOM_MAX, self.zoom))
 
     POLL_MS = 1500
     DESC_TTL = 5.0
@@ -462,7 +514,7 @@ class NotionRecorder(Adw.Application):
         Gtk.Window.set_default_icon_name(APP_ID)
         self.load_css()
         self.setup_actions()
-        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=470, default_height=670)
+        self.window = Adw.ApplicationWindow(application=self, title=APP_NAME, default_width=470, default_height=600)
         self.window.set_icon_name(APP_ID)
         self.window.connect("close-request", self.on_close)
         toolbar = Adw.ToolbarView()
@@ -475,18 +527,24 @@ class NotionRecorder(Adw.Application):
         switcher = Gtk.StackSwitcher(stack=stack)
         header.set_title_widget(switcher)
         menu = Gio.Menu()
-        menu.append("Show first-call tips", "app.tips")
-        menu.append(f"About {APP_NAME}", "app.about")
+        zoom_section = Gio.Menu()
+        zoom_section.append("Zoom in", "app.zoom-in")
+        zoom_section.append("Zoom out", "app.zoom-out")
+        zoom_section.append("Reset zoom", "app.zoom-reset")
+        menu.append_section(None, zoom_section)
+        misc_section = Gio.Menu()
+        misc_section.append("Show first-call tips", "app.tips")
+        misc_section.append(f"About {APP_NAME}", "app.about")
+        menu.append_section(None, misc_section)
         menu_button = Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu")
         header.pack_end(menu_button)
         toolbar.add_top_bar(header)
         recorder_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
-        recorder_page.append(self.build_important_card())
         recorder_page.append(self.build_state_card())
         recorder_page.append(self.build_dials())
         recorder_page.append(self.build_footer())
-        stack.add_titled(recorder_page, "recorder", "Recorder")
-        stack.add_titled(self.build_config_page(), "config", "Configuration")
+        stack.add_titled(self.clamp(recorder_page), "recorder", "Recorder")
+        stack.add_titled(self.clamp(self.build_config_page()), "config", "Configuration")
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(stack)
         toolbar.set_content(scroller)
@@ -494,6 +552,7 @@ class NotionRecorder(Adw.Application):
         self.window.connect("notify::suspended", self.on_suspended)
         self.window.present()
         self.refresh()
+        GLib.timeout_add(350, self.maybe_show_first_call)
         GLib.timeout_add(250, self.auto_start_if_needed)
         for delay in (150, 500, 1200):
             GLib.timeout_add(delay, self.refresh_once)
@@ -519,8 +578,20 @@ class NotionRecorder(Adw.Application):
         about.connect("activate", self.show_about)
         self.add_action(about)
         tips = Gio.SimpleAction.new("tips", None)
-        tips.connect("activate", self.show_tips)
+        tips.connect("activate", self.show_first_call)
         self.add_action(tips)
+        zoom_actions = (
+            ("zoom-in", lambda *_: self.change_zoom(ZOOM_STEP),
+             ["<Primary>plus", "<Primary>equal", "<Primary>KP_Add"]),
+            ("zoom-out", lambda *_: self.change_zoom(-ZOOM_STEP),
+             ["<Primary>minus", "<Primary>KP_Subtract"]),
+            ("zoom-reset", lambda *_: self.reset_zoom(), ["<Primary>0", "<Primary>KP_0"]),
+        )
+        for name, callback, accels in zoom_actions:
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", callback)
+            self.add_action(action)
+            self.set_accels_for_action(f"app.{name}", accels)
 
     def show_about(self, *_args) -> None:
         about = Adw.AboutDialog(
@@ -547,38 +618,57 @@ class NotionRecorder(Adw.Application):
     def load_css(self) -> None:
         self._apply_color_scheme()
         self._apply_dial_track()
+        self._reload_css()
+
+    def _reload_css(self) -> None:
+        display = Gdk.Display.get_default()
+        if self.css_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(display, self.css_provider)
         self.css_provider = Gtk.CssProvider()
-        self.css_provider.load_from_data(build_css(self.theme))
+        self.css_provider.load_from_data(build_css(self.theme, self.zoom))
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), self.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            display, self.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        for dial in self.dials.values():
+            dial.canvas.queue_draw()
 
     def _apply_color_scheme(self) -> None:
         scheme = Adw.ColorScheme.FORCE_DARK if theme_is_dark(self.theme) else Adw.ColorScheme.FORCE_LIGHT
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _apply_dial_track(self) -> None:
-        # Ring track colour: a soft warm charcoal on dark skins, mint-grey on light.
-        AudioDial.TRACK = (0.26, 0.21, 0.17) if theme_is_dark(self.theme) else (0.87, 0.91, 0.89)
+        # Ring track colour: a soft charcoal on dark skins, neutral grey on light.
+        AudioDial.TRACK = (0.24, 0.23, 0.22) if theme_is_dark(self.theme) else (0.88, 0.90, 0.92)
 
     def apply_theme(self, theme: str) -> None:
         self.theme = theme if theme in THEMES else DEFAULT_THEME
         write_setting("theme", self.theme)
-        display = Gdk.Display.get_default()
-        if self.css_provider is not None:
-            Gtk.StyleContext.remove_provider_for_display(display, self.css_provider)
         self._apply_color_scheme()
         self._apply_dial_track()
-        self.css_provider = Gtk.CssProvider()
-        self.css_provider.load_from_data(build_css(self.theme))
-        Gtk.StyleContext.add_provider_for_display(
-            display, self.css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        for dial in self.dials.values():
-            dial.canvas.queue_draw()
+        self._reload_css()
 
     def on_theme_changed(self, dropdown: Gtk.DropDown, _param) -> None:
         index = dropdown.get_selected()
         if 0 <= index < len(THEME_ORDER):
             self.apply_theme(THEME_ORDER[index])
+
+    def change_zoom(self, delta: float) -> None:
+        new_zoom = round(max(ZOOM_MIN, min(ZOOM_MAX, self.zoom + delta)), 2)
+        if abs(new_zoom - self.zoom) < 0.001:
+            return
+        self.zoom = new_zoom
+        write_setting("zoom", str(self.zoom))
+        self._reload_css()
+
+    def reset_zoom(self) -> None:
+        if abs(self.zoom - 1.0) < 0.001:
+            return
+        self.zoom = 1.0
+        write_setting("zoom", "1.0")
+        self._reload_css()
+
+    @staticmethod
+    def clamp(child: Gtk.Widget) -> Adw.Clamp:
+        return Adw.Clamp(child=child, maximum_size=440, tightening_threshold=380)
 
     def build_state_card(self) -> Gtk.Widget:
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
@@ -616,46 +706,31 @@ class NotionRecorder(Adw.Application):
             card.append(dial.box)
         return card
 
-    def build_important_card(self) -> Gtk.Widget:
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        card.add_css_class("important-card")
-        self.important_card = card
-        heading = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic")
-        icon.add_css_class("important-icon")
-        title = Gtk.Label(label="Read before your first call", xalign=0, hexpand=True)
-        title.add_css_class("important-title")
-        dismiss = Gtk.Button(icon_name="window-close-symbolic", valign=Gtk.Align.START,
-                             tooltip_text="Dismiss (reopen from the menu)")
-        dismiss.add_css_class("flat")
-        dismiss.add_css_class("important-dismiss")
-        dismiss.connect("clicked", self.on_dismiss_important)
-        heading.append(icon)
-        heading.append(title)
-        heading.append(dismiss)
-        card.append(heading)
-        rules = [
-            ("In Notion", "pick \u201cNotion Meeting Mix\u201d as the mic."),
-            ("In Meet / Zoom / Teams", "keep your real mic \u2014 never the Mix, or people hear echo."),
-            ("Headphones", "wear them so meeting audio isn\u2019t re-captured."),
-        ]
-        for lead, rest in rules:
-            rule = Gtk.Label(xalign=0, wrap=True)
-            rule.add_css_class("important-rule")
-            rule.set_markup(f"<b>{GLib.markup_escape_text(lead)}:</b> {GLib.markup_escape_text(rest)}")
-            card.append(rule)
-        card.set_visible(read_setting("important_dismissed") != "1")
-        return card
+    def maybe_show_first_call(self) -> bool:
+        """On startup, show the tips dialog unless the user hid it."""
+        if read_setting("important_dismissed") != "1":
+            self.show_first_call()
+        return False
 
-    def on_dismiss_important(self, _button: Gtk.Button) -> None:
-        write_setting("important_dismissed", "1")
-        if self.important_card is not None:
-            self.important_card.set_visible(False)
-
-    def show_tips(self, *_args) -> None:
-        write_setting("important_dismissed", "0")
-        if self.important_card is not None:
-            self.important_card.set_visible(True)
+    def show_first_call(self, *_args) -> None:
+        body = "\n".join(
+            f"<b>{GLib.markup_escape_text(lead)}:</b> {GLib.markup_escape_text(rest)}"
+            for lead, rest in FIRST_CALL_RULES
+        )
+        dialog = Adw.AlertDialog(heading="Read before your first call")
+        dialog.set_body_use_markup(True)
+        dialog.set_body(body)
+        check = Gtk.CheckButton(label="Don\u2019t show this on startup")
+        check.set_active(read_setting("important_dismissed") == "1")
+        dialog.set_extra_child(check)
+        dialog.add_response("close", "Got it")
+        dialog.set_default_response("close")
+        dialog.set_close_response("close")
+        dialog.connect(
+            "response",
+            lambda _d, _r: write_setting("important_dismissed", "1" if check.get_active() else "0"),
+        )
+        dialog.present(self.window)
 
     def build_config_page(self) -> Gtk.Widget:
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_top=14, margin_bottom=14, margin_start=18, margin_end=18)
@@ -663,7 +738,7 @@ class NotionRecorder(Adw.Application):
         card.add_css_class("config-card")
         title = Gtk.Label(label="Choose what Notion receives", xalign=0)
         title.add_css_class("state-title")
-        note = Gtk.Label(label="These physical devices are mixed into the private Notion input. Google Meet stays on your physical microphone and headphones.", xalign=0, wrap=True)
+        note = Gtk.Label(label="Mixed into the private Notion input. Your call keeps using your own mic and headphones.", xalign=0, wrap=True)
         note.add_css_class("state-detail")
         card.append(title)
         card.append(note)
@@ -676,14 +751,14 @@ class NotionRecorder(Adw.Application):
         self.preselect(self.output_dropdown, self.output_devices, self.saved_value("sink"))
 
         card.append(self.labeled(
-            "Your voice sent to Notion", "The microphone participants hear you through.",
+            "Your voice sent to Notion", "",
             self.mic_dropdown))
         self.mic_applied = Gtk.Label(label="", xalign=0, wrap=True)
         self.mic_applied.add_css_class("applied")
         card.append(self.mic_applied)
 
         card.append(self.labeled(
-            "Meeting and system sound sent to Notion", "The speaker output whose sound is captured for the transcript.",
+            "Meeting and system sound sent to Notion", "",
             self.output_dropdown))
         self.output_applied = Gtk.Label(label="", xalign=0, wrap=True)
         self.output_applied.add_css_class("applied")
@@ -697,9 +772,9 @@ class NotionRecorder(Adw.Application):
         save.connect("clicked", self.apply_config)
         card.append(save)
 
+        page.append(self.build_automation_card())
         page.append(card)
         page.append(self.build_appearance_card())
-        page.append(self.build_automation_card())
         page.append(self.build_diagram())
         return page
 
@@ -715,7 +790,7 @@ class NotionRecorder(Adw.Application):
         self.theme_dropdown = Gtk.DropDown.new_from_strings([THEME_LABELS[k] for k in THEME_ORDER])
         self.theme_dropdown.set_selected(THEME_ORDER.index(self.theme) if self.theme in THEME_ORDER else 0)
         self.theme_dropdown.connect("notify::selected", self.on_theme_changed)
-        card.append(self.labeled("Skin", "The colour theme for this window.", self.theme_dropdown))
+        card.append(self.labeled("Skin", "", self.theme_dropdown))
         return card
 
     @staticmethod
@@ -790,10 +865,11 @@ class NotionRecorder(Adw.Application):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=8)
         title = Gtk.Label(label=label, xalign=0)
         title.add_css_class("field-label")
-        subtitle = Gtk.Label(label=hint, xalign=0, wrap=True)
-        subtitle.add_css_class("field-hint")
         box.append(title)
-        box.append(subtitle)
+        if hint:
+            subtitle = Gtk.Label(label=hint, xalign=0, wrap=True)
+            subtitle.add_css_class("field-hint")
+            box.append(subtitle)
         box.append(widget)
         return box
 
@@ -809,25 +885,25 @@ class NotionRecorder(Adw.Application):
         dropdown.set_selected(0)
 
     def build_diagram(self) -> Gtk.Widget:
-        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         wrap.add_css_class("flow-wrap")
-        heading = Gtk.Label(label="How the audio flows", xalign=0)
+        heading = Gtk.Label(label="How the audio flows", halign=Gtk.Align.CENTER)
         heading.add_css_class("flow-title")
         wrap.append(heading)
 
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10, halign=Gtk.Align.CENTER)
-        inputs = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, valign=Gtk.Align.CENTER)
+        steps = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, halign=Gtk.Align.CENTER)
+        inputs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8, halign=Gtk.Align.CENTER)
         inputs.append(self.flow_card("Your microphone"))
         inputs.append(self.flow_card("Meeting audio"))
-        row.append(inputs)
-        row.append(self.flow_arrow("\u2192"))
-        row.append(self.flow_card("Private Notion Mix", "mix"))
-        row.append(self.flow_arrow("\u2192"))
-        row.append(self.flow_card("Notion transcript", "sink"))
-        wrap.append(row)
+        steps.append(inputs)
+        steps.append(self.flow_arrow("\u2193"))
+        steps.append(self.flow_card("Private Notion Mix", "mix"))
+        steps.append(self.flow_arrow("\u2193"))
+        steps.append(self.flow_card("Notion transcript", "sink"))
+        wrap.append(steps)
 
         note = Gtk.Label(
-            label="The mix is capture-only. It reaches Notion but is never played to your headphones, so meeting participants hear no echo. Google Meet uses the physical microphone and headphones directly.",
+            label="Capture-only: the mix reaches Notion but never your headphones, so no echo. Your call keeps using your real mic.",
             xalign=0, wrap=True)
         note.add_css_class("flow-note")
         wrap.append(note)
