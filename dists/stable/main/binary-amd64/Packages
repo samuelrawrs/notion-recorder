@@ -1,0 +1,28 @@
+Package: notion-recorder
+Version: 1.0.1
+Architecture: all
+Maintainer: samuelrawrs <54682777+samuelrawrs@users.noreply.github.com>
+Installed-Size: 101
+Depends: init-system-helpers (>= 1.52), python3, python3-gi, python3-gi-cairo, python3-cairo, gir1.2-gtk-4.0, gir1.2-adw-1, pulseaudio-utils
+Recommends: pipewire-pulse, gir1.2-ayatanaappindicator3-0.1, gir1.2-gtk-3.0
+Homepage: https://github.com/samuelrawrs/notion-recorder
+Priority: optional
+Section: sound
+Filename: pool/main/n/notion-recorder/notion-recorder_1.0.1_all.deb
+Size: 24208
+SHA256: 51ad95fb1272bfc21b162b4961289d354dc2cfc0daed3bbcdffb7941f139432f
+SHA1: c5dcc83b67f6ce6148ccb0f2a8fa50a02fc39526
+MD5sum: cc1a0c8335511fa6cac12fc53998825c
+Description: No-echo meeting audio input for Notion AI Meeting Notes
+ Notion Recorder creates a capture-only PipeWire/PulseAudio virtual microphone
+ that mixes your voice with the selected speaker output, so Notion AI Meeting
+ Notes transcribes both sides of a call in a single input.
+ .
+ The mix is never routed back to playback, so remote meeting participants never
+ hear an echo, and the system default microphone is left untouched (Google Meet,
+ Zoom and Teams keep using it unchanged).
+ .
+ Ships a GTK4/libadwaita control app with live level meters, friendly device
+ pickers and an audio-flow diagram, plus an optional mic-activity daemon that can
+ auto-start and stop the mix around calls.
+
