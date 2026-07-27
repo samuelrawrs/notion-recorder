@@ -28,7 +28,9 @@ POLL_INTERVAL="${NOTION_DAEMON_POLL_SECONDS:-2}"        # periodic reconcile cad
 STOP_DEBOUNCE="${NOTION_DAEMON_STOP_DEBOUNCE_SECONDS:-4}" # zero-capture grace before stop
 RETRY_INTERVAL="${NOTION_DAEMON_RETRY_SECONDS:-5}"      # wait when pactl is unavailable
 
-readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/notion-recorder"
+# Prefer the per-user runtime dir; otherwise use a UID-scoped /tmp path so we
+# never share a predictable directory (and lock/state files) with other users.
+readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp/notion-recorder-$(id -u)}/notion-recorder"
 readonly OWNED_FLAG="$STATE_DIR/daemon-autostarted"
 
 BRIDGE=""
@@ -112,7 +114,7 @@ external_capture_count() {
 start_bridge() {
   log "external mic capture detected -> starting bridge"
   if "$BRIDGE" start >/dev/null 2>&1; then
-    mkdir -p "$STATE_DIR" 2>/dev/null && : > "$OWNED_FLAG"
+    mkdir -p "$STATE_DIR" 2>/dev/null && chmod 700 "$STATE_DIR" 2>/dev/null && : > "$OWNED_FLAG"
   else
     log "bridge start failed"
   fi

@@ -4,7 +4,9 @@ set -euo pipefail
 
 readonly MIX_SINK='notion_meeting_mix'
 readonly MIX_SOURCE='notion_meeting_mix_source'
-readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/notion-recorder"
+# Prefer the per-user runtime dir; otherwise use a UID-scoped /tmp path so we
+# never share a predictable directory (and lock/state files) with other users.
+readonly STATE_DIR="${XDG_RUNTIME_DIR:-/tmp/notion-recorder-$(id -u)}/notion-recorder"
 readonly PREVIOUS_SOURCE_FILE="$STATE_DIR/previous-default-source"
 readonly CONFIG_DIR="$HOME/.config/notion-recorder"
 readonly CONFIG_FILE="$CONFIG_DIR/audio.conf"

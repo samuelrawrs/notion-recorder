@@ -59,6 +59,11 @@
   <url type="bugtracker">https://github.com/samuelrawrs/notion-recorder/issues</url>
 
   <releases>
+    <release version="1.0.1" date="2026-07-26">
+      <description>
+        <p>Refresh routes now re-syncs system audio to the current default output. Plus hardening: a UID-scoped runtime directory and a more isolated, SHA-pinned release pipeline.</p>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-07-24">
       <description>
         <p>First release: guided no-echo meeting mix, live meters, friendly device pickers, and an audio-flow diagram.</p>

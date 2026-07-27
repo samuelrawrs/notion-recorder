@@ -42,7 +42,7 @@ Download `notion-recorder_<version>_all.deb` from the
 [Releases page](https://github.com/samuelrawrs/notion-recorder/releases), then:
 
 ```bash
-sudo apt install ./notion-recorder_1.0.0_all.deb
+sudo apt install ./notion-recorder_1.0.1_all.deb
 ```
 </details>
 

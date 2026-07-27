@@ -23,7 +23,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 APP_ID = "io.github.samuelrawrs.NotionRecorder"
 APP_NAME = "Notion Recorder"
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 WEBSITE = "https://github.com/samuelrawrs/notion-recorder"
 
 ROOT = Path(__file__).resolve().parent
@@ -498,6 +498,7 @@ class NotionRecorder(Adw.Application):
             self.theme = DEFAULT_THEME
         self.css_provider: Gtk.CssProvider | None = None
         self.theme_dropdown: Gtk.DropDown | None = None
+        self.toasts: Adw.ToastOverlay | None = None
         try:
             self.zoom = float(read_setting("zoom") or "1.0")
         except ValueError:
@@ -547,7 +548,9 @@ class NotionRecorder(Adw.Application):
         stack.add_titled(self.clamp(self.build_config_page()), "config", "Configuration")
         scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
         scroller.set_child(stack)
-        toolbar.set_content(scroller)
+        self.toasts = Adw.ToastOverlay()
+        self.toasts.set_child(scroller)
+        toolbar.set_content(self.toasts)
         self.window.set_content(toolbar)
         self.window.connect("notify::suspended", self.on_suspended)
         self.window.present()
@@ -689,7 +692,7 @@ class NotionRecorder(Adw.Application):
         self.repair_button.set_child(Adw.ButtonContent(label="Refresh routes", icon_name="view-refresh-symbolic", halign=Gtk.Align.CENTER))
         self.repair_button.add_css_class("repair")
         self.repair_button.add_css_class("pill")
-        self.repair_button.connect("clicked", lambda _: self.refresh())
+        self.repair_button.connect("clicked", self.on_repair)
         card.append(eyebrow)
         card.append(self.status_label)
         card.append(self.detail_label)
@@ -1074,6 +1077,47 @@ class NotionRecorder(Adw.Application):
             self.on_action(None)
         return False
 
+    def toast(self, message: str) -> None:
+        if self.toasts is not None:
+            self.toasts.add_toast(Adw.Toast(title=message, timeout=3))
+
+    def on_repair(self, _: Gtk.Button | None) -> None:
+        """Re-scan routes and, if the bridge is on, adapt system audio to the
+        current default output (rebuilds only the output loopback)."""
+        if self.action_in_flight:
+            return
+        if not self.snapshot.active:
+            self.refresh()
+            self.toast("Bridge is off, nothing to sync.")
+            return
+        self.action_in_flight = True
+        self.action_button.set_sensitive(False)
+        self.repair_button.set_sensitive(False)
+        self.detail_label.set_label("Checking the current output and re-syncing\u2026")
+        threading.Thread(target=self.run_repair, daemon=True).start()
+
+    def run_repair(self) -> None:
+        result = subprocess.run([str(BRIDGE), "sync-output"], text=True, capture_output=True)
+        GLib.idle_add(self.finish_repair, result)
+
+    def finish_repair(self, result: subprocess.CompletedProcess[str]) -> bool:
+        self.action_in_flight = False
+        self.action_button.set_sensitive(True)
+        self.repair_button.set_sensitive(True)
+        self.refresh()
+        if result.returncode:
+            lines = result.stderr.strip().splitlines()
+            self.toast(lines[-1] if lines else "Could not re-sync routes.")
+        elif "already monitors" in (result.stdout or ""):
+            self.toast("Already matches the current output.")
+        elif self.snapshot.active and self.snapshot.system_audio:
+            sink = self.snapshot.system_audio
+            sink = sink[:-len(".monitor")] if sink.endswith(".monitor") else sink
+            self.toast(f"Re-synced to {self.describe(sink)}.")
+        else:
+            self.toast("Re-synced to the current output.")
+        return False
+
     def refresh_once(self) -> bool:
         self.refresh()
         return False
@@ -1120,7 +1164,7 @@ class NotionRecorder(Adw.Application):
             self.footer_label.set_label("Notion: unavailable until PipeWire returns")
         elif snap.active:
             self.status_label.set_label("Bridge is on")
-            self.detail_label.set_label("Mixed for Notion only. Your default mic is unchanged, so Google Meet is unaffected." if snap.output_synced else "Your speaker output changed. Refresh routes, then restart the bridge if needed.")
+            self.detail_label.set_label("Mixed for Notion only. Your default mic is unchanged, so Google Meet is unaffected." if snap.output_synced else "Your speaker output changed. Click Refresh routes to re-sync system audio.")
             self.set_action("Stop bridge", "media-playback-stop-symbolic")
             self.action_button.add_css_class("stop")
             self.footer_label.set_label("Notion: connected" if snap.notion_captures else "Notion: start a fresh transcript and choose \u201cNotion Meeting Mix\u201d")

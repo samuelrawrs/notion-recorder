@@ -1,3 +1,17 @@
+notion-recorder (1.0.1) noble; urgency=medium
+
+  * Refresh routes now adapts to the live default output: when the bridge is on
+    it re-points system audio at the current default sink (rebuilding only the
+    output loopback) and confirms the result with a toast, instead of just
+    re-reading state.
+  * Hardening: UID-scoped runtime dir with 0700 perms when XDG_RUNTIME_DIR is
+    absent, avoiding a predictable shared /tmp path for lock and state files.
+  * Release pipeline: isolate the GPG signing key from the third-party deploy
+    action, pin actions to commit SHAs, drop to least-privilege token
+    permissions, and publish SHA256SUMS with the release.
+
+ -- samuelrawrs <54682777+samuelrawrs@users.noreply.github.com>  Sun, 26 Jul 2026 15:00:00 +0000
+
 notion-recorder (1.0.0) noble; urgency=medium
 
   * Initial release: guided no-echo meeting mix for Notion AI Meeting Notes,
