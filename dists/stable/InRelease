@@ -1,0 +1,48 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: notion-recorder
+Label: Notion Recorder
+Suite: stable
+Codename: stable
+Date: Fri, 02 Oct 2026 05:08:46 UTC
+Architectures: amd64 arm64
+Components: main
+Description: Notion Recorder apt repository
+MD5Sum:
+ 274669b2157e1688a7e36d138b026e67 1396 main/binary-amd64/Packages
+ df0b5a19dad4f3b6a6c4aa5c3c1de551 851 main/binary-amd64/Packages.gz
+ 9c63aae48c111fd1202c48d994946d2a 143 main/binary-amd64/Release
+ 274669b2157e1688a7e36d138b026e67 1396 main/binary-arm64/Packages
+ df0b5a19dad4f3b6a6c4aa5c3c1de551 851 main/binary-arm64/Packages.gz
+ 63b8158610d0fab1852370da3c7e70e5 143 main/binary-arm64/Release
+SHA1:
+ b64c721ee44384092be09906ff014b9ba946be59 1396 main/binary-amd64/Packages
+ 1a7dcf630532198366dca4d18b63360064162e0c 851 main/binary-amd64/Packages.gz
+ f5b1605713814aed6baa61ca22dfe54bc655f764 143 main/binary-amd64/Release
+ b64c721ee44384092be09906ff014b9ba946be59 1396 main/binary-arm64/Packages
+ 1a7dcf630532198366dca4d18b63360064162e0c 851 main/binary-arm64/Packages.gz
+ 23ea932af1d925cb7347da390c46395577ebfd8f 143 main/binary-arm64/Release
+SHA256:
+ 0fb3cdbcc5aa551525555af583a4ec8fe5c01d584f6e9e2de75d70ebdcba1d09 1396 main/binary-amd64/Packages
+ e708ae3c384dd18d957324fc4cf6d8be357aaeeee3529f8e62598042b92938b9 851 main/binary-amd64/Packages.gz
+ 09ac006d9c22f57104756a8fcd926973e46c68ff9d66a99f49c808228cdbf0f0 143 main/binary-amd64/Release
+ 0fb3cdbcc5aa551525555af583a4ec8fe5c01d584f6e9e2de75d70ebdcba1d09 1396 main/binary-arm64/Packages
+ e708ae3c384dd18d957324fc4cf6d8be357aaeeee3529f8e62598042b92938b9 851 main/binary-arm64/Packages.gz
+ 1e4ff7747c54b24c899cd1ce9673d79dc3bfb639b4f12463293f2b1f035bc3f9 143 main/binary-arm64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEPmQ/S5v0S2cYfB3Cyz3oJSSH+tcFAmq/PF4ACgkQyz3oJSSH
++tcoMQ//ZVIcuY6jCLGgNS2zoqvbh9fK/g3gh8uKXGFFwC42L57KTnWp3ls4c3LC
+yV2fqunmDfMwVl0b2FM1NRQt/SSf0vtBGE9JnP5zuVb3VfUzWHghqDoOq1zaHlry
+TwWjmpsSETZXbvnS2J2MQ4Ksg3CjGX0qYUlTGB8/D8PNB7UP+/zZRSXjmKYZoxim
+JWQk7lAG9QS3gz+WLSSlG83s4B84Sv48zTxNxHe5BI6Txkdc8c3RFCyVU2qSOtpY
+DYwfJsQp6HzD5l6KEJnBNI4hPIUycjfIl6etMAgKWG38waUZjKFpzVx3nXGfxgtg
+lvQqqktcJNgM+0+1x2MwPmATUEVPCof3ATElvi6oSp/Ryoqw2YXNN8uhMR8lWCX0
+gXv3TVHuW+QhMm8ptm1kG7t3pzZP58l6k9/2Xj+/gQSQ2JLbUYaoGpwebGVPdgEz
+gKVqmGmGBIMbHCbhWZ4EftUUBpk3ILFvS/GQyne3Mzua89mFYtfuR3/WnwYyXe+s
+SdrtzmJEuet7vqYy0AKg0fjHGm6FBeOFQUcsuLhD8t3Xp/6tZppyfnRF0Ml+8wJ6
+IY3QKjcasAedjTrKkjTIvbscbN77GHYikdDRL7ShxQBHlrkS/Jto+o/qGSnu7g6Q
+i7wbZ7JHHf0v5GaDaUj74tvR8/wIbVXzyDbp0Odk1fxy5Qx1860=
+=OGRn
+-----END PGP SIGNATURE-----

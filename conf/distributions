@@ -1,0 +1,8 @@
+Origin: notion-recorder
+Label: Notion Recorder
+Codename: stable
+Suite: stable
+Components: main
+Architectures: amd64 arm64
+Description: Notion Recorder apt repository
+SignWith: 3E643F4B9BF44B67187C1DC2CB3DE8252487FAD7

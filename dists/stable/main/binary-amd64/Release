@@ -1,0 +1,6 @@
+Archive: stable
+Component: main
+Origin: notion-recorder
+Label: Notion Recorder
+Architecture: amd64
+Description: Notion Recorder apt repository
