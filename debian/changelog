@@ -1,3 +1,16 @@
+notion-recorder (1.0.2) noble; urgency=medium
+
+  * Autostart daemon is now edge-triggered instead of level-triggered. It starts
+    the bridge when external mic capture rises from zero, and after a manual Stop
+    it stays stopped until the mic goes idle and re-arms. Stop is no longer
+    immediately overridden while an app still holds the mic (e.g. a browser that
+    keeps the mic open after a call).
+  * Daemon ignores benign level monitors when deciding if you are in a meeting:
+    corked source-outputs and "Peak detect" VU meters such as the GNOME Settings
+    Sound panel no longer count as mic activity.
+
+ -- samuelrawrs <54682777+samuelrawrs@users.noreply.github.com>  Fri, 02 Oct 2026 05:00:00 +0000
+
 notion-recorder (1.0.1) noble; urgency=medium
 
   * Refresh routes now adapts to the live default output: when the bridge is on

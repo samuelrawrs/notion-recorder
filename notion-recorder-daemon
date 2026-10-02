@@ -3,19 +3,25 @@
 #
 # Watches PipeWire (through pactl's PulseAudio compatibility layer) for EXTERNAL
 # capture streams on the physical microphone and:
-#   * starts `notion-meeting-audio` when another app begins capturing the mic
-#     (Google Meet / Zoom / Teams / any recorder), and
+#   * starts `notion-meeting-audio` on a RISING EDGE, when external mic capture
+#     goes from zero to non-zero (Google Meet / Zoom / Teams / any recorder), and
 #   * stops it again a few seconds after external capture returns to zero.
 #
 # Mic activity is the trigger because it is the one framework-agnostic signal for
 # "the user is in a meeting or recording" - it works for every conferencing app
 # and does not depend on browser tab / window heuristics.
 #
+# Edge-triggered, not level-triggered: it will NOT keep restarting the bridge
+# while capture is merely present. So if you manually Stop the bridge while an
+# app still holds the mic (e.g. a browser that keeps the mic open after a call),
+# it stays stopped and only re-arms once the mic goes idle again.
+#
 # CRITICAL: once the bridge runs it loads its own module-loopback that records
 # from the physical mic. That would make a naive "mic in use" check latch on
-# forever. This daemon therefore counts only EXTERNAL source-outputs on the mic,
-# excluding any owned by the bridge's own notion_meeting_mix modules and the
-# app's own level meter.
+# forever. This daemon therefore counts only EXTERNAL recording source-outputs on
+# the mic, excluding any owned by the bridge's own notion_meeting_mix modules,
+# the app's own level meter, and benign VU monitors (corked or "Peak detect"
+# streams such as the GNOME Settings Sound panel).
 #
 # Privacy: the daemon never records or inspects audio samples. It only reads
 # stream metadata (indices, owner modules, application names) from pactl.
@@ -35,6 +41,13 @@ readonly OWNED_FLAG="$STATE_DIR/daemon-autostarted"
 
 BRIDGE=""
 zero_since=0
+# Auto-start is edge-triggered: it fires when external mic capture rises from
+# zero, not merely whenever capture is present. `armed` gates the next start;
+# `prev_active` lets us notice when the bridge went inactive (a manual Stop)
+# while capture is still ongoing, so we respect that Stop until the mic goes
+# idle and re-arms for the next session.
+armed=1
+prev_active=0
 
 log() { printf '%s notion-recorder-daemon: %s\n' "$(date '+%H:%M:%S')" "$*" >&2; }
 
@@ -82,8 +95,12 @@ bridge_module_ids() {
 }
 
 # Count EXTERNAL capture streams on the given physical-mic source index.
-# Excludes source-outputs owned by a bridge module (its own mic loopback) and the
-# app's own parec level meter, so the count reflects only third-party apps.
+# Excludes, so the count reflects only real third-party recording:
+#   * source-outputs owned by a bridge module (its own mic loopback),
+#   * the app's own parec level meter (by application.name), and
+#   * benign level monitors that are not actually recording: corked streams and
+#     VU meters whose media.name is "Peak detect" (e.g. the GNOME Settings Sound
+#     panel), which would otherwise look like "the mic is in use" forever.
 external_capture_count() {
   local mic_idx="$1"
   shift
@@ -91,16 +108,23 @@ external_capture_count() {
   pactl list source-outputs 2>/dev/null | awk \
     -v mic="$mic_idx" -v excl="$exclude" -v meter="$METER_CLIENT" '
     function flush() {
-      if (have && src == mic && !(owner in ex) && app != meter) count++
+      if (have && src == mic && !(owner in ex) && app != meter && !corked && mname != "Peak detect") count++
     }
     BEGIN {
       n = split(excl, arr, " ")
       for (i = 1; i <= n; i++) if (arr[i] != "") ex[arr[i]] = 1
       count = 0
     }
-    /^Source Output #/ { flush(); have = 1; src = ""; owner = ""; app = "" }
+    /^Source Output #/ { flush(); have = 1; src = ""; owner = ""; app = ""; corked = 0; mname = "" }
     /^[[:space:]]*Source:/ { src = $2 }
     /^[[:space:]]*Owner Module:/ { owner = $3 }
+    /^[[:space:]]*Corked:/ { corked = ($2 == "yes") }
+    /media\.name = "/ {
+      line = $0
+      sub(/^.*media\.name = "/, "", line)
+      sub(/".*/, "", line)
+      mname = line
+    }
     /application\.name = "/ {
       line = $0
       sub(/^.*application\.name = "/, "", line)
@@ -143,29 +167,42 @@ reconcile() {
 
   if bridge_active; then active=1; else active=0; fi
 
-  if (( count > 0 )); then
-    zero_since=0
-    (( active == 0 )) && start_bridge
+  if (( active == 1 )); then
+    if (( count > 0 )); then
+      zero_since=0
+    elif [[ -f "$OWNED_FLAG" ]]; then
+      # We auto-started it and external capture ended: debounce, then stop.
+      now="$(date +%s)"
+      if (( zero_since == 0 )); then
+        zero_since=$now
+      elif (( now - zero_since >= STOP_DEBOUNCE )); then
+        stop_bridge
+        zero_since=0
+      fi
+    else
+      # Manual start with no external capture: never torn down under the user.
+      zero_since=0
+    fi
+    prev_active=1
     return 0
   fi
 
-  # No external capture on the physical mic.
-  if (( active == 0 )); then
-    zero_since=0
-    return 0
+  # Bridge is inactive.
+  zero_since=0
+  if (( prev_active == 1 && count > 0 )); then
+    # It went inactive while external capture continues: the user stopped it.
+    # Respect that; do not restart until capture ends and re-arms us.
+    armed=0
+    rm -f "$OWNED_FLAG"
   fi
-  # Bridge is on. Only auto-stop what the daemon itself auto-started, so a manual
-  # start from the UI is never torn down underneath the user.
-  if [[ ! -f "$OWNED_FLAG" ]]; then
-    return 0
+  if (( count == 0 )); then
+    armed=1                 # mic idle: re-arm for the next session
+    rm -f "$OWNED_FLAG"
+  elif (( armed == 1 )); then
+    start_bridge            # rising edge / fresh session -> auto-start
   fi
-  now="$(date +%s)"
-  if (( zero_since == 0 )); then
-    zero_since=$now
-  elif (( now - zero_since >= STOP_DEBOUNCE )); then
-    stop_bridge
-    zero_since=0
-  fi
+  prev_active=0
+  return 0
 }
 
 # Event stream from pactl subscribe, with a read timeout so reconciliation also

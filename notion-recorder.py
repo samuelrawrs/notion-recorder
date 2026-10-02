@@ -23,7 +23,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 APP_ID = "io.github.samuelrawrs.NotionRecorder"
 APP_NAME = "Notion Recorder"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 WEBSITE = "https://github.com/samuelrawrs/notion-recorder"
 
 ROOT = Path(__file__).resolve().parent

@@ -59,6 +59,11 @@
   <url type="bugtracker">https://github.com/samuelrawrs/notion-recorder/issues</url>
 
   <releases>
+    <release version="1.0.2" date="2026-10-02">
+      <description>
+        <p>Autostart is now edge-triggered and respects a manual Stop, and benign level monitors no longer count as mic activity, so the mix no longer re-enables itself.</p>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-07-26">
       <description>
         <p>Refresh routes now re-syncs system audio to the current default output. Plus hardening: a UID-scoped runtime directory and a more isolated, SHA-pinned release pipeline.</p>
